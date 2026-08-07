@@ -1,24 +1,31 @@
 # convert.py — Full pipeline: comic file → panel-by-panel EPUB
-# Usage: python src/convert.py <comic-file> [--manga] [--title "Title"] [--output file.epub]
+# Usage: python src/convert.py <comic-file> [--manga] [--ltr] [--title "Title"] [--output file.epub]
 # Requires: all deps from extract.py, detect_panels.py, build_epub.py
 #
-# This is the main entry point that chains:
-# 1. Extract pages from archive (CBZ/CBR/CB7)
-# 2. Detect and crop panels from each page
-# 3. Build EPUB with one panel per page
+# Reading direction is auto-detected from ComicInfo.xml metadata (genre, CJK text,
+# source app). Override with --manga (force RTL) or --ltr (force LTR).
 
 import sys
 import shutil
 from pathlib import Path
 
-from extract import extract
+from extract import extract, detect_reading_direction
 from detect_panels import detect_panels, crop_panels, process_directory
 from build_epub import build_epub
 
 
-def convert(comic_path, manga=False, title=None, output_path=None, keep_intermediates=False):
+def convert(comic_path, manga=None, title=None, output_path=None, keep_intermediates=False):
     comic_path = Path(comic_path)
     print(f"=== Converting: {comic_path.name} ===\n")
+
+    # Auto-detect reading direction if not explicitly set
+    if manga is None:
+        direction, reason = detect_reading_direction(comic_path)
+        manga = (direction == 'rtl')
+        print(f"[auto] Reading direction: {'RTL (manga)' if manga else 'LTR (western)'} — {reason}")
+    else:
+        print(f"[manual] Reading direction: {'RTL (manga)' if manga else 'LTR (western)'}")
+    print()
 
     if title is None:
         title = comic_path.stem
@@ -28,6 +35,12 @@ def convert(comic_path, manga=False, title=None, output_path=None, keep_intermed
     pages_dir = extract(comic_path)
     print()
 
+    # Grab the first page as cover image before panels get cropped
+    cover_path = None
+    cover_candidates = sorted(pages_dir.glob("page_*.*"))
+    if cover_candidates:
+        cover_path = cover_candidates[0]
+
     # Step 2: Detect and crop panels
     print("[2/3] Detecting panels...")
     panels_dir = process_directory(pages_dir, manga=manga)
@@ -35,7 +48,7 @@ def convert(comic_path, manga=False, title=None, output_path=None, keep_intermed
 
     # Step 3: Build EPUB
     print("[3/3] Building EPUB...")
-    epub_path = build_epub(panels_dir, title=title, output_path=output_path)
+    epub_path = build_epub(panels_dir, title=title, output_path=output_path, cover_image_path=cover_path, manga=manga)
 
     # Cleanup intermediates
     if not keep_intermediates:
@@ -49,12 +62,18 @@ def convert(comic_path, manga=False, title=None, output_path=None, keep_intermed
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: python src/convert.py <comic-file> [--manga] [--title \"Title\"] [--output file.epub] [--keep]")
+        print("Usage: python src/convert.py <comic-file> [--manga] [--ltr] [--title \"Title\"] [--output file.epub] [--keep]")
         sys.exit(1)
 
     comic = sys.argv[1]
-    manga = "--manga" in sys.argv
     keep = "--keep" in sys.argv
+
+    # Reading direction: None = auto-detect, True = manga RTL, False = western LTR
+    manga = None
+    if "--manga" in sys.argv:
+        manga = True
+    elif "--ltr" in sys.argv:
+        manga = False
 
     title = None
     if "--title" in sys.argv:

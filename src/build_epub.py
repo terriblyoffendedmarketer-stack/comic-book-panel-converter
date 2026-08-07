@@ -35,7 +35,7 @@ def resize_for_device(img, max_width=1236, max_height=1648):
     return img
 
 
-def build_epub(panels_dir, title=None, output_path=None, max_width=1236, max_height=1648):
+def build_epub(panels_dir, title=None, output_path=None, cover_image_path=None, manga=False, max_width=1236, max_height=1648):
     """Build an EPUB from a directory of panel images."""
     panels_dir = Path(panels_dir)
 
@@ -113,22 +113,29 @@ def build_epub(panels_dir, title=None, output_path=None, max_width=1236, max_hei
     book.add_item(epub.EpubNav())
     book.spine = spine
 
-    # Set cover image manually (set_cover creates broken empty XHTML on some versions)
-    if panel_files:
-        cover_img = Image.open(panel_files[0])
+    # Set cover image
+    cover_src = cover_image_path if cover_image_path else (panel_files[0] if panel_files else None)
+    if cover_src:
+        cover_img = Image.open(cover_src)
+        w, h = cover_img.size
+
+        # If landscape (wider than tall), it's a cover spread or wrap-around
+        # Use the full image — e-readers will letterbox it, which looks fine
+        # for covers since they're typically displayed smaller anyway
+
         cover_img = resize_for_device(cover_img, max_width, max_height)
         buf = BytesIO()
         if cover_img.mode == "RGBA":
             cover_img = cover_img.convert("RGB")
         cover_img.save(buf, "JPEG", quality=92)
 
-        cover_image = epub.EpubImage()
-        cover_image.file_name = "cover.jpg"
-        cover_image.media_type = "image/jpeg"
-        cover_image.content = buf.getvalue()
-        book.add_item(cover_image)
+        cover_epub = epub.EpubImage()
+        cover_epub.file_name = "cover.jpg"
+        cover_epub.media_type = "image/jpeg"
+        cover_epub.content = buf.getvalue()
+        book.add_item(cover_epub)
         book.add_metadata("http://www.idpf.org/2007/opf", "cover", "", {"content": "cover-img"})
-        cover_image.id = "cover-img"
+        cover_epub.id = "cover-img"
 
     epub.write_epub(str(output_path), book)
     print(f"Done. {len(panel_files)} panels → {output_path}")

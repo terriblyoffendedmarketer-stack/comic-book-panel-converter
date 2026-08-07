@@ -15,6 +15,7 @@ import os
 import zipfile
 import shutil
 import re
+import xml.etree.ElementTree as ET
 from pathlib import Path
 import rarfile
 
@@ -22,6 +23,88 @@ rarfile.UNRAR_TOOL = "unar"
 rarfile.ALT_TOOL = "unar"
 
 IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tiff'}
+
+MANGA_GENRES = {'seinen', 'shounen', 'shoujo', 'josei', 'shonen', 'shojo',
+                'manhua', 'manhwa', 'manga'}
+MANGA_SOURCES = {'mangadex', 'manga', 'mihon', 'tachiyomi', 'komga'}
+CJK_RANGES = [
+    (0x3000, 0x303F),   # CJK punctuation
+    (0x3040, 0x309F),   # Hiragana
+    (0x30A0, 0x30FF),   # Katakana
+    (0x4E00, 0x9FFF),   # CJK unified ideographs
+    (0xAC00, 0xD7AF),   # Hangul
+]
+
+
+def has_cjk(text):
+    for ch in text:
+        cp = ord(ch)
+        for start, end in CJK_RANGES:
+            if start <= cp <= end:
+                return True
+    return False
+
+
+def detect_reading_direction(comic_path):
+    """
+    Auto-detect if a comic is manga (RTL) or western (LTR).
+    Returns ('rtl', reason) or ('ltr', reason).
+    Checks ComicInfo.xml metadata inside CBZ/CBR archives.
+    """
+    comic_path = Path(comic_path)
+    ext = comic_path.suffix.lower()
+
+    metadata = None
+    if ext == '.cbz':
+        try:
+            with zipfile.ZipFile(comic_path, 'r') as zf:
+                if 'ComicInfo.xml' in zf.namelist():
+                    with zf.open('ComicInfo.xml') as f:
+                        metadata = f.read().decode('utf-8')
+        except Exception:
+            pass
+
+    if metadata:
+        try:
+            root = ET.fromstring(metadata)
+
+            # Check explicit Manga field
+            manga_elem = root.find('Manga')
+            if manga_elem is not None and manga_elem.text:
+                val = manga_elem.text.lower()
+                if 'yes' in val or 'right' in val:
+                    return 'rtl', f'ComicInfo.xml Manga={manga_elem.text}'
+                if 'no' in val or 'left' in val:
+                    return 'ltr', f'ComicInfo.xml Manga={manga_elem.text}'
+
+            full_text = metadata.lower()
+
+            # Check genres for manga indicators
+            genre_elem = root.find('Genre')
+            if genre_elem is not None and genre_elem.text:
+                genres = {g.strip().lower() for g in genre_elem.text.split(',')}
+                matches = genres & MANGA_GENRES
+                if matches:
+                    return 'rtl', f'genre: {", ".join(matches)}'
+
+            # Check for CJK in title/summary (Japanese/Chinese/Korean names)
+            for field in ['Title', 'Series', 'Summary']:
+                elem = root.find(field)
+                if elem is not None and elem.text and has_cjk(elem.text):
+                    return 'rtl', f'CJK text in {field}'
+
+            # Check source (Mihon/Tachiyomi = manga reader)
+            for elem in root.iter():
+                if 'source' in elem.tag.lower() or 'mihon' in elem.tag.lower():
+                    if elem.text:
+                        for src in MANGA_SOURCES:
+                            if src in elem.text.lower():
+                                return 'rtl', f'source: {elem.text}'
+
+        except ET.ParseError:
+            pass
+
+    return 'ltr', 'default (no manga indicators found)'
 
 
 def natural_sort_key(s):
