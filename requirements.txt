@@ -1,0 +1,5 @@
+rarfile
+py7zr
+Pillow
+opencv-python-headless
+ebooklib
