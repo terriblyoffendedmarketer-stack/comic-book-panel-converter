@@ -3,16 +3,20 @@
 # Requires: ebooklib, Pillow
 #
 # Gotchas:
-# - Kindle wants images sized to device resolution for best display.
-#   Kindle Paperwhite: 1236x1648, XTe Ink 4: check specs. We scale to fit
-#   within a max dimension while preserving aspect ratio.
-# - EPUB images must be referenced with relative paths inside the archive.
-# - ebooklib doesn't handle image-only EPUBs perfectly — we wrap each image
-#   in minimal HTML for reliable rendering.
+# - Must use EPUB3 rendition properties for Kindle fixed-layout support.
+# - ebooklib strips <meta name="viewport"> from XHTML head — we post-process
+#   the EPUB zip to inject viewport tags into each page.
+# - ebooklib set_cover() is broken — manually create EpubImage + OPF metadata.
+# - Landscape panels (width > height * 1.3) are rotated 90 CW for portrait
+#   reading, with a small orientation arrow baked into the image.
 
 import sys
+import shutil
+import tempfile
+import zipfile
 from pathlib import Path
-from PIL import Image
+from io import BytesIO
+from PIL import Image, ImageDraw
 from ebooklib import epub
 import re
 
@@ -22,21 +26,78 @@ def natural_sort_key(s):
 
 
 def resize_for_device(img, max_width=1236, max_height=1648):
-    """Resize image to fit device screen, preserving aspect ratio."""
     w, h = img.size
-    ratio_w = max_width / w
-    ratio_h = max_height / h
-    ratio = min(ratio_w, ratio_h)
-
+    ratio = min(max_width / w, max_height / h)
     if ratio < 1:
-        new_w = int(w * ratio)
-        new_h = int(h * ratio)
-        return img.resize((new_w, new_h), Image.LANCZOS)
+        return img.resize((int(w * ratio), int(h * ratio)), Image.LANCZOS)
     return img
 
 
+LANDSCAPE_THRESHOLD = 1.3
+
+
+def is_landscape_panel(img):
+    w, h = img.size
+    return w > h * LANDSCAPE_THRESHOLD
+
+
+def draw_orientation_arrow(img):
+    w, h = img.size
+    arrow_size = min(w, h) // 15
+    margin = arrow_size // 2
+    cx = w - margin - arrow_size // 2
+    cy = margin + arrow_size // 2
+
+    draw = ImageDraw.Draw(img, 'RGBA')
+    bg_r = arrow_size
+    draw.ellipse(
+        [cx - bg_r, cy - bg_r, cx + bg_r, cy + bg_r],
+        fill=(0, 0, 0, 140)
+    )
+    draw.polygon([
+        (cx, cy - arrow_size // 2),
+        (cx - arrow_size // 3, cy + arrow_size // 2),
+        (cx + arrow_size // 3, cy + arrow_size // 2)
+    ], fill=(255, 255, 255, 220))
+    return img
+
+
+def prepare_panel_image(img, max_width, max_height):
+    rotated = False
+    if is_landscape_panel(img):
+        img = img.rotate(-90, expand=True)
+        if img.mode != 'RGBA':
+            img = img.convert('RGBA')
+        img = draw_orientation_arrow(img)
+        rotated = True
+
+    if img.mode == 'RGBA':
+        background = Image.new('RGB', img.size, (0, 0, 0))
+        background.paste(img, mask=img.split()[3])
+        img = background
+
+    img = resize_for_device(img, max_width, max_height)
+    return img, rotated
+
+
+def inject_viewports(epub_path, panel_viewports):
+    """Post-process EPUB zip to inject viewport meta into each XHTML page's <head>."""
+    tmp_path = epub_path + '.tmp'
+    with zipfile.ZipFile(epub_path, 'r') as zin, zipfile.ZipFile(tmp_path, 'w') as zout:
+        for item in zin.infolist():
+            data = zin.read(item.filename)
+            basename = item.filename.split('/')[-1]
+            if basename in panel_viewports:
+                w, h = panel_viewports[basename]
+                viewport_tag = f'<meta name="viewport" content="width={w}, height={h}"/>'
+                content = data.decode('utf-8')
+                content = content.replace('</title>', f'</title>\n    {viewport_tag}')
+                data = content.encode('utf-8')
+            zout.writestr(item, data)
+    shutil.move(tmp_path, epub_path)
+
+
 def build_epub(panels_dir, title=None, output_path=None, cover_image_path=None, manga=False, max_width=1236, max_height=1648):
-    """Build an EPUB from a directory of panel images."""
     panels_dir = Path(panels_dir)
 
     if title is None:
@@ -47,9 +108,9 @@ def build_epub(panels_dir, title=None, output_path=None, cover_image_path=None, 
     else:
         output_path = Path(output_path)
 
-    # Gather panel images
     panel_files = sorted(
-        [f for f in panels_dir.iterdir() if f.suffix.lower() in {'.jpg', '.jpeg', '.png'}],
+        [f for f in panels_dir.iterdir()
+         if f.suffix.lower() in {'.jpg', '.jpeg', '.png'} and '_debug' not in f.name],
         key=lambda f: natural_sort_key(f.name)
     )
 
@@ -62,20 +123,69 @@ def build_epub(panels_dir, title=None, output_path=None, cover_image_path=None, 
     book.set_title(title)
     book.set_language("en")
 
-    # Add metadata for comic/manga rendering
-    book.add_metadata(None, "meta", "", {"name": "fixed-layout", "content": "true"})
-    book.add_metadata(None, "meta", "", {"name": "original-resolution", "content": f"{max_width}x{max_height}"})
+    # EPUB3 fixed-layout metadata
+    book.add_metadata(
+        "http://www.idpf.org/2007/opf", "meta", "pre-paginated",
+        {"property": "rendition:layout"}
+    )
+    book.add_metadata(
+        "http://www.idpf.org/2007/opf", "meta", "none",
+        {"property": "rendition:spread"}
+    )
+    book.add_metadata(
+        "http://www.idpf.org/2007/opf", "meta", "auto",
+        {"property": "rendition:orientation"}
+    )
+
+    if manga:
+        book.set_direction("rtl")
 
     spine = ["nav"]
     toc = []
+    rotated_count = 0
+    panel_viewports = {}
+
+    # Add cover image first
+    cover_src = cover_image_path if cover_image_path else (panel_files[0] if panel_files else None)
+    if cover_src:
+        cover_img = Image.open(cover_src)
+        cover_img = resize_for_device(cover_img, max_width, max_height)
+        buf = BytesIO()
+        if cover_img.mode == "RGBA":
+            cover_img = cover_img.convert("RGB")
+        cover_img.save(buf, "JPEG", quality=92)
+        cover_w, cover_h = cover_img.size
+
+        cover_epub = epub.EpubImage()
+        cover_epub.file_name = "cover.jpg"
+        cover_epub.media_type = "image/jpeg"
+        cover_epub.content = buf.getvalue()
+        cover_epub.id = "cover-img"
+        book.add_item(cover_epub)
+        book.add_metadata("http://www.idpf.org/2007/opf", "meta", "cover-img",
+                          {"name": "cover", "content": "cover-img"})
+
+        # Cover page XHTML
+        cover_chapter = epub.EpubHtml(
+            title="Cover",
+            file_name="cover.xhtml",
+            lang="en"
+        )
+        cover_chapter.content = (
+            f'<div style="margin:0;padding:0;width:{cover_w}px;height:{cover_h}px;background:#000;">'
+            f'<img src="cover.jpg" alt="Cover" style="width:{cover_w}px;height:{cover_h}px;"/>'
+            f'</div>'
+        )
+        book.add_item(cover_chapter)
+        spine.insert(1, cover_chapter)
+        panel_viewports["cover.xhtml"] = (cover_w, cover_h)
 
     for i, panel_file in enumerate(panel_files):
-        # Resize image for device
         img = Image.open(panel_file)
-        img = resize_for_device(img, max_width, max_height)
+        img, rotated = prepare_panel_image(img, max_width, max_height)
+        if rotated:
+            rotated_count += 1
 
-        # Convert to JPEG bytes
-        from io import BytesIO
         buf = BytesIO()
         if img.mode == "RGBA":
             img = img.convert("RGB")
@@ -90,19 +200,22 @@ def build_epub(panels_dir, title=None, output_path=None, cover_image_path=None, 
         epub_img.content = img_data
         book.add_item(epub_img)
 
-        # Create HTML page for this panel
         page_id = f"panel_{i:04d}"
-
         chapter = epub.EpubHtml(
             title=f"Panel {i+1}",
             file_name=f"{page_id}.xhtml",
             lang="en"
         )
-        chapter.content = f'<div style="margin:0;padding:0;text-align:center;background:#000;"><img src="{img_filename}" alt="Panel {i+1}" style="max-width:100%;max-height:100%;"/></div>'
+        chapter.content = (
+            f'<div style="margin:0;padding:0;width:{img_w}px;height:{img_h}px;background:#000;">'
+            f'<img src="{img_filename}" alt="Panel {i+1}" '
+            f'style="width:{img_w}px;height:{img_h}px;"/>'
+            f'</div>'
+        )
         book.add_item(chapter)
         spine.append(chapter)
+        panel_viewports[f"{page_id}.xhtml"] = (img_w, img_h)
 
-        # Add TOC entry for first panel of each page
         page_match = re.match(r'page_(\d+)_panel_(\d+)', panel_file.stem)
         if page_match and page_match.group(2) == "00":
             page_num = int(page_match.group(1)) + 1
@@ -113,33 +226,15 @@ def build_epub(panels_dir, title=None, output_path=None, cover_image_path=None, 
     book.add_item(epub.EpubNav())
     book.spine = spine
 
-    # Set cover image
-    cover_src = cover_image_path if cover_image_path else (panel_files[0] if panel_files else None)
-    if cover_src:
-        cover_img = Image.open(cover_src)
-        w, h = cover_img.size
-
-        # If landscape (wider than tall), it's a cover spread or wrap-around
-        # Use the full image — e-readers will letterbox it, which looks fine
-        # for covers since they're typically displayed smaller anyway
-
-        cover_img = resize_for_device(cover_img, max_width, max_height)
-        buf = BytesIO()
-        if cover_img.mode == "RGBA":
-            cover_img = cover_img.convert("RGB")
-        cover_img.save(buf, "JPEG", quality=92)
-
-        cover_epub = epub.EpubImage()
-        cover_epub.file_name = "cover.jpg"
-        cover_epub.media_type = "image/jpeg"
-        cover_epub.content = buf.getvalue()
-        book.add_item(cover_epub)
-        book.add_metadata("http://www.idpf.org/2007/opf", "cover", "", {"content": "cover-img"})
-        cover_epub.id = "cover-img"
-
     epub.write_epub(str(output_path), book)
+
+    # Post-process: inject viewport meta tags (ebooklib strips them)
+    inject_viewports(str(output_path), panel_viewports)
+
     print(f"Done. {len(panel_files)} panels → {output_path}")
     print(f"  Title: {title}")
+    print(f"  Cover: {'yes' if cover_src else 'no'}")
+    print(f"  Rotated: {rotated_count} landscape panels")
     print(f"  Size: {output_path.stat().st_size / 1024 / 1024:.1f} MB")
     return output_path
 

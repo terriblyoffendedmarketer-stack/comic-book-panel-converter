@@ -1,0 +1,227 @@
+{
+  "book": "The Riddler: Year One",
+  "source": "Kindle Unlimited (Mac app)",
+  "total_frames": 20,
+  "captures": [
+    {
+      "frame": 0,
+      "step": 0,
+      "filename": "frame_000.png",
+      "size": [
+        2048,
+        1480
+      ],
+      "hash": "b0975bf6697f910a09bf7f6a26b526ac",
+      "diff_from_prev": null
+    },
+    {
+      "frame": 1,
+      "step": 1,
+      "filename": "frame_001.png",
+      "size": [
+        2048,
+        1480
+      ],
+      "hash": "72c3411b1757404556fe272d02d62a87",
+      "diff_from_prev": 0.2198
+    },
+    {
+      "frame": 2,
+      "step": 2,
+      "filename": "frame_002.png",
+      "size": [
+        2048,
+        1480
+      ],
+      "hash": "4040a496ab49e611eede2bd458696983",
+      "diff_from_prev": 0.2517
+    },
+    {
+      "frame": 3,
+      "step": 3,
+      "filename": "frame_003.png",
+      "size": [
+        2048,
+        1480
+      ],
+      "hash": "be1cb4ebf614d7db2c3501cb8161df50",
+      "diff_from_prev": 0.0747
+    },
+    {
+      "frame": 4,
+      "step": 4,
+      "filename": "frame_004.png",
+      "size": [
+        2048,
+        1480
+      ],
+      "hash": "7f3e8072eff272bc97d849bec8cd4ca0",
+      "diff_from_prev": 0.1748
+    },
+    {
+      "frame": 5,
+      "step": 5,
+      "filename": "frame_005.png",
+      "size": [
+        2048,
+        1480
+      ],
+      "hash": "42afd94642241dd4d4d81e307a82efb1",
+      "diff_from_prev": 0.1386
+    },
+    {
+      "frame": 6,
+      "step": 6,
+      "filename": "frame_006.png",
+      "size": [
+        2048,
+        1480
+      ],
+      "hash": "f959969c6850626cdcec8f5a4d0f046c",
+      "diff_from_prev": 0.1175
+    },
+    {
+      "frame": 7,
+      "step": 7,
+      "filename": "frame_007.png",
+      "size": [
+        2048,
+        1480
+      ],
+      "hash": "88c4616f207f5895836bdc7c431805b3",
+      "diff_from_prev": 0.1022
+    },
+    {
+      "frame": 8,
+      "step": 8,
+      "filename": "frame_008.png",
+      "size": [
+        2048,
+        1480
+      ],
+      "hash": "7028e73fe190f15ae70ecd471c58cdd9",
+      "diff_from_prev": 0.1449
+    },
+    {
+      "frame": 9,
+      "step": 9,
+      "filename": "frame_009.png",
+      "size": [
+        2048,
+        1480
+      ],
+      "hash": "045046b883ede28237c383f537b902ae",
+      "diff_from_prev": 0.1656
+    },
+    {
+      "frame": 10,
+      "step": 10,
+      "filename": "frame_010.png",
+      "size": [
+        2048,
+        1480
+      ],
+      "hash": "be88d77a68ec371896c7838f36837b8b",
+      "diff_from_prev": 0.267
+    },
+    {
+      "frame": 11,
+      "step": 11,
+      "filename": "frame_011.png",
+      "size": [
+        2048,
+        1480
+      ],
+      "hash": "63bbf3e9728f6f5cbaa157fc9ac4e8a2",
+      "diff_from_prev": 0.2476
+    },
+    {
+      "frame": 12,
+      "step": 12,
+      "filename": "frame_012.png",
+      "size": [
+        2048,
+        1480
+      ],
+      "hash": "f380ee5938f214472fd18dd265058238",
+      "diff_from_prev": 0.3646
+    },
+    {
+      "frame": 13,
+      "step": 13,
+      "filename": "frame_013.png",
+      "size": [
+        2048,
+        1480
+      ],
+      "hash": "71f3394fab6e7bd4130ed103ae5045d7",
+      "diff_from_prev": 0.1704
+    },
+    {
+      "frame": 14,
+      "step": 14,
+      "filename": "frame_014.png",
+      "size": [
+        2048,
+        1480
+      ],
+      "hash": "9c93cae4a682e767557de082a9c052e2",
+      "diff_from_prev": 0.1662
+    },
+    {
+      "frame": 15,
+      "step": 15,
+      "filename": "frame_015.png",
+      "size": [
+        2048,
+        1480
+      ],
+      "hash": "210b66df97b32b55a726f6766b3f4be4",
+      "diff_from_prev": 0.2626
+    },
+    {
+      "frame": 16,
+      "step": 16,
+      "filename": "frame_016.png",
+      "size": [
+        2048,
+        1480
+      ],
+      "hash": "5373e527c8f8f8b012476eb0558557da",
+      "diff_from_prev": 0.6308
+    },
+    {
+      "frame": 17,
+      "step": 17,
+      "filename": "frame_017.png",
+      "size": [
+        2048,
+        1480
+      ],
+      "hash": "de4d8fd0e7c850278523b5045e08129f",
+      "diff_from_prev": 0.1207
+    },
+    {
+      "frame": 18,
+      "step": 18,
+      "filename": "frame_018.png",
+      "size": [
+        2048,
+        1480
+      ],
+      "hash": "0d212deae11fa15ac42b841e31312ca5",
+      "diff_from_prev": 0.1897
+    },
+    {
+      "frame": 19,
+      "step": 19,
+      "filename": "frame_019.png",
+      "size": [
+        2048,
+        1480
+      ],
+      "hash": "7dfc77e7704662b432a0dfbf95f45145",
+      "diff_from_prev": 0.2142
+    }
+  ]
+}

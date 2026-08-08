@@ -1,173 +1,149 @@
-# detect_panels.py — Detects panel boundaries in comic/manga page images
+# detect_panels.py — Detects and groups panel boundaries in comic/manga page images
 # Usage: python src/detect_panels.py <image-or-directory> [--manga] [--debug]
 # Requires: opencv-python-headless, numpy, Pillow
 #
+# Pipeline: Kumiko detection → merge split panels → group by row → full-bleed fallback
+#
 # Gotchas:
-# - Uses projection-based gutter detection: project ink density onto rows/columns,
-#   find valleys (low-ink bands) = gutters. Works for narrow gutters that
-#   morphological approaches miss.
-# - Full-page splashes (no panels) return the whole page as a single panel.
-# - Manga reading order: rows top-to-bottom, panels RIGHT-to-left within rows.
-# - The --debug flag saves annotated images showing detected panel boundaries.
+# - Kumiko is NOT pip-installable (pip install kumiko = Discord bot).
+# - Kumiko handles reading order natively — pass numbering='rtl' for manga.
+# - merge_split_panels() only merges narrow panels (<45% page width) to avoid
+#   merging separate wide panels that happen to share x/width alignment.
+# - group_panels_into_views() uses 40% vertical overlap for row detection
+#   and 45% page width as the narrow threshold for grouping.
 
 import sys
+import os
 import cv2
 import numpy as np
 from pathlib import Path
 from PIL import Image
 
-
-def find_gutter_positions(projection, page_size, min_gutter_width=5, ink_threshold=0.05):
-    """
-    Find gutter positions from a 1D ink projection.
-    A gutter is a contiguous run of rows/columns where ink density is below threshold.
-    Returns list of gutter center positions.
-    """
-    is_gutter = projection < (page_size * ink_threshold)
-
-    gutters = []
-    in_gutter = False
-    start = 0
-
-    for i in range(len(is_gutter)):
-        if is_gutter[i]:
-            if not in_gutter:
-                in_gutter = True
-                start = i
-        else:
-            if in_gutter:
-                width = i - start
-                if width >= min_gutter_width:
-                    center = (start + i) // 2
-                    gutters.append(center)
-                in_gutter = False
-
-    return gutters
+sys.path.insert(0, str(Path(__file__).parent))
+from kumiko import Page, NotAnImageException
 
 
-def detect_panels(image_path, manga=False, min_panel_ratio=0.03, debug=False):
-    """
-    Detect panels in a comic page image using projection-based gutter detection.
-    Returns list of (x, y, w, h) tuples in reading order.
-    """
-    img = cv2.imread(str(image_path))
-    if img is None:
+def detect_panels(image_path, manga=False, debug=False):
+    numbering = 'rtl' if manga else 'ltr'
+    try:
+        page = Page(str(image_path), numbering=numbering, debug=False, panel_expansion=True)
+    except NotAnImageException:
         return []
 
-    h, w = img.shape[:2]
-    min_panel_area = h * w * min_panel_ratio
-
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-
-    # Create ink mask (dark pixels = content)
-    _, ink = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY_INV)
-
-    # Trim page margins: find content bounding box
-    margin_top, margin_bottom = 0, h
-    margin_left, margin_right = 0, w
-
-    h_proj = np.sum(ink, axis=1) / 255  # ink pixels per row
-    v_proj = np.sum(ink, axis=0) / 255  # ink pixels per column
-
-    # Find content bounds (skip empty margins)
-    content_rows = np.where(h_proj > w * 0.01)[0]
-    content_cols = np.where(v_proj > h * 0.01)[0]
-    if len(content_rows) > 0:
-        margin_top = max(0, content_rows[0] - 5)
-        margin_bottom = min(h, content_rows[-1] + 5)
-    if len(content_cols) > 0:
-        margin_left = max(0, content_cols[0] - 5)
-        margin_right = min(w, content_cols[-1] + 5)
-
-    # Find horizontal gutters (splits page into rows of panels)
-    # Only search within content area
-    h_proj_content = h_proj[margin_top:margin_bottom]
-    h_gutters = find_gutter_positions(h_proj_content, w, min_gutter_width=5, ink_threshold=0.03)
-    h_gutters = [g + margin_top for g in h_gutters]
-
-    # Build horizontal strips
-    h_splits = [margin_top] + h_gutters + [margin_bottom]
-
     panels = []
-    for strip_idx in range(len(h_splits) - 1):
-        strip_top = h_splits[strip_idx]
-        strip_bottom = h_splits[strip_idx + 1]
-        strip_height = strip_bottom - strip_top
-
-        if strip_height < 30:
-            continue
-
-        # For each horizontal strip, find vertical gutters
-        strip_ink = ink[strip_top:strip_bottom, margin_left:margin_right]
-        v_proj_strip = np.sum(strip_ink, axis=0) / 255
-
-        v_gutters = find_gutter_positions(v_proj_strip, strip_height, min_gutter_width=5, ink_threshold=0.03)
-        v_gutters = [g + margin_left for g in v_gutters]
-
-        v_splits = [margin_left] + v_gutters + [margin_right]
-
-        for col_idx in range(len(v_splits) - 1):
-            panel_left = v_splits[col_idx]
-            panel_right = v_splits[col_idx + 1]
-            panel_width = panel_right - panel_left
-
-            if panel_width < 30:
-                continue
-
-            area = panel_width * strip_height
-            if area < min_panel_area:
-                continue
-
-            panels.append((panel_left, strip_top, panel_width, strip_height))
-
-    # If no panels found, treat whole page as single panel
-    if not panels:
-        panels = [(margin_left, margin_top, margin_right - margin_left, margin_bottom - margin_top)]
-
-    panels = sort_panels(panels, manga=manga)
+    for p in page.panels:
+        x, y, w, h = p.to_xywh()
+        panels.append((x, y, w, h))
 
     if debug:
-        save_debug_image(img, panels, image_path, manga)
+        img = cv2.imread(str(image_path))
+        if img is not None:
+            save_debug_image(img, panels, image_path, manga)
 
     return panels
 
 
-def sort_panels(panels, manga=False, row_threshold_ratio=0.3):
-    """
-    Sort panels in reading order.
-    Group into rows by vertical position, then sort within rows.
+def merge_split_panels(panels, page_width, x_tolerance=30, w_tolerance=50, gap_threshold=50):
+    """Merge panels that Kumiko incorrectly split vertically.
+    Only merges narrow panels (< 45% page width) — wide panels with matching
+    x/width are separate intentional panels, not split errors."""
+    narrow_threshold = page_width * 0.45
+    merged = [list(p) for p in panels]
+    changed = True
+    while changed:
+        changed = False
+        for i in range(len(merged)):
+            for j in range(i + 1, len(merged)):
+                pi, pj = merged[i], merged[j]
+                if pi[2] >= narrow_threshold or pj[2] >= narrow_threshold:
+                    continue
+                if (abs(pi[0] - pj[0]) < x_tolerance and
+                        abs(pi[2] - pj[2]) < w_tolerance):
+                    bottom_i = pi[1] + pi[3]
+                    bottom_j = pj[1] + pj[3]
+                    gap = min(abs(bottom_i - pj[1]), abs(bottom_j - pi[1]))
+                    if gap < gap_threshold:
+                        x = min(pi[0], pj[0])
+                        y = min(pi[1], pj[1])
+                        x2 = max(pi[0] + pi[2], pj[0] + pj[2])
+                        y2 = max(bottom_i, bottom_j)
+                        merged[i] = [x, y, x2 - x, y2 - y]
+                        merged.pop(j)
+                        changed = True
+                        break
+            if changed:
+                break
+    return [tuple(p) for p in merged]
+
+
+def group_panels_into_views(panels, page_width, page_height):
+    """Group narrow panels in the same row into combined views.
+
+    Returns a list of views. Each view is (x, y, w, h) — either a single
+    panel or the bounding box of multiple grouped panels.
+
+    Full-bleed fallback: if only 1 panel covers >50% of page area,
+    returns [(0, 0, page_width, page_height)] — full page.
     """
     if not panels:
-        return panels
+        return []
 
-    heights = [h for _, _, _, h in panels]
-    median_h = sorted(heights)[len(heights) // 2]
-    row_threshold = median_h * row_threshold_ratio
+    page_area = page_width * page_height
 
-    panels_sorted = sorted(panels, key=lambda p: p[1])
+    if len(panels) == 1:
+        p = panels[0]
+        panel_area = p[2] * p[3]
+        if panel_area > page_area * 0.50:
+            return [(0, 0, page_width, page_height)]
+        return [panels[0]]
+
+    panels = merge_split_panels(panels, page_width)
 
     rows = []
-    current_row = [panels_sorted[0]]
+    used = set()
+    sorted_panels = sorted(enumerate(panels), key=lambda p: p[1][1])
 
-    for panel in panels_sorted[1:]:
-        prev_y = current_row[0][1]
-        if abs(panel[1] - prev_y) < row_threshold:
-            current_row.append(panel)
-        else:
-            rows.append(current_row)
-            current_row = [panel]
-    rows.append(current_row)
+    for idx, panel in sorted_panels:
+        if idx in used:
+            continue
+        row = [idx]
+        used.add(idx)
 
-    ordered = []
+        for idx2, panel2 in sorted_panels:
+            if idx2 in used:
+                continue
+            overlap_start = max(panel[1], panel2[1])
+            overlap_end = min(panel[1] + panel[3], panel2[1] + panel2[3])
+            overlap = max(0, overlap_end - overlap_start)
+            min_h = min(panel[3], panel2[3])
+            if min_h > 0 and overlap / min_h > 0.4:
+                row.append(idx2)
+                used.add(idx2)
+
+        rows.append(row)
+
+    views = []
+    narrow_threshold = page_width * 0.45
+
     for row in rows:
-        row_sorted = sorted(row, key=lambda p: p[0], reverse=manga)
-        ordered.extend(row_sorted)
+        row_panels = [panels[i] for i in row]
+        if len(row_panels) == 1:
+            views.append(row_panels[0])
+        else:
+            narrow_count = sum(1 for p in row_panels if p[2] < narrow_threshold)
+            if narrow_count >= 2:
+                x_min = min(p[0] for p in row_panels)
+                y_min = min(p[1] for p in row_panels)
+                x_max = max(p[0] + p[2] for p in row_panels)
+                y_max = max(p[1] + p[3] for p in row_panels)
+                views.append((x_min, y_min, x_max - x_min, y_max - y_min))
+            else:
+                views.extend(row_panels)
 
-    return ordered
+    return views
 
 
 def crop_panels(image_path, panels, output_dir, page_index, padding=5):
-    """Crop and save individual panels from a page."""
     img = Image.open(image_path)
     w, h = img.size
     saved = []
@@ -187,7 +163,6 @@ def crop_panels(image_path, panels, output_dir, page_index, padding=5):
 
 
 def save_debug_image(img, panels, image_path, manga):
-    """Save image with panel boundaries drawn for visual verification."""
     debug_img = img.copy()
     colors = [(0, 255, 0), (255, 0, 0), (0, 0, 255), (255, 255, 0),
               (255, 0, 255), (0, 255, 255)]
@@ -205,8 +180,26 @@ def save_debug_image(img, panels, image_path, manga):
     print(f"  Debug: {debug_path.name} — {len(panels)} panels [{direction}]")
 
 
+def save_grouped_debug(image_path, raw_panels, views):
+    """Debug image showing raw panels (thin lines) and grouped views (thick boxes)."""
+    img = cv2.imread(str(image_path))
+    if img is None:
+        return
+    for x, y, w, h in raw_panels:
+        cv2.rectangle(img, (x, y), (x + w, y + h), (128, 128, 128), 2)
+    view_colors = [(0, 255, 0), (255, 0, 0), (0, 0, 255), (255, 255, 0),
+                   (255, 0, 255), (0, 255, 255)]
+    for i, (x, y, w, h) in enumerate(views):
+        color = view_colors[i % len(view_colors)]
+        cv2.rectangle(img, (x, y), (x + w, y + h), color, 6)
+        cv2.putText(img, f"V{i + 1}", (x + 10, y + 50),
+                    cv2.FONT_HERSHEY_SIMPLEX, 1.5, color, 4)
+    debug_path = Path(image_path).parent / f"{Path(image_path).stem}_grouped.jpg"
+    cv2.imwrite(str(debug_path), img)
+    print(f"  Grouped debug: {debug_path.name} — {len(views)} views")
+
+
 def process_directory(input_dir, output_dir=None, manga=False, debug=False):
-    """Process all page images in a directory."""
     input_dir = Path(input_dir)
     if output_dir is None:
         output_dir = input_dir.parent / f"{input_dir.name}_panels"
@@ -214,21 +207,26 @@ def process_directory(input_dir, output_dir=None, manga=False, debug=False):
         output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    pages = sorted([p for p in input_dir.glob("page_*.jpg") if "_debug" not in p.name])
+    skip = ("_debug", "_grouped")
+    pages = sorted([p for p in input_dir.glob("page_*.jpg") if not any(s in p.name for s in skip)])
     if not pages:
-        pages = sorted([p for p in input_dir.glob("*.jpg") if "_debug" not in p.name])
+        pages = sorted([p for p in input_dir.glob("*.jpg") if not any(s in p.name for s in skip)])
     if not pages:
-        pages = sorted([p for p in input_dir.glob("*.png") if "_debug" not in p.name])
+        pages = sorted([p for p in input_dir.glob("*.png") if not any(s in p.name for s in skip)])
 
-    total_panels = 0
+    total_views = 0
     for page_path in pages:
         page_idx = int(page_path.stem.split("_")[1]) if "_" in page_path.stem else pages.index(page_path)
+        img = Image.open(page_path)
+        pw, ph = img.size
         panels = detect_panels(page_path, manga=manga, debug=debug)
-        saved = crop_panels(page_path, panels, output_dir, page_idx)
-        total_panels += len(saved)
-        print(f"  {page_path.name}: {len(panels)} panels")
+        views = group_panels_into_views(panels, pw, ph)
+        saved = crop_panels(page_path, views, output_dir, page_idx)
+        total_views += len(saved)
+        grouped = f" → {len(views)} views" if len(views) != len(panels) else ""
+        print(f"  {page_path.name}: {len(panels)} panels{grouped}")
 
-    print(f"\nDone. {total_panels} panels from {len(pages)} pages → {output_dir}/")
+    print(f"\nDone. {total_views} views from {len(pages)} pages → {output_dir}/")
     return output_dir
 
 
