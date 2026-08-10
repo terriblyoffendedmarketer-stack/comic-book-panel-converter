@@ -42,23 +42,26 @@ def is_landscape_panel(img):
 
 
 def draw_orientation_arrow(img):
+    """Draw a small arrow pointing RIGHT — toward the original top of the panel.
+    After 90° CW rotation, the original top is on the right side.
+    Placed in bottom-right corner to avoid obscuring speech bubbles."""
     w, h = img.size
-    arrow_size = min(w, h) // 15
-    margin = arrow_size // 2
+    arrow_size = min(w, h) // 20
+    margin = arrow_size
     cx = w - margin - arrow_size // 2
-    cy = margin + arrow_size // 2
+    cy = h - margin - arrow_size // 2
 
     draw = ImageDraw.Draw(img, 'RGBA')
     bg_r = arrow_size
     draw.ellipse(
         [cx - bg_r, cy - bg_r, cx + bg_r, cy + bg_r],
-        fill=(0, 0, 0, 140)
+        fill=(0, 0, 0, 100)
     )
     draw.polygon([
-        (cx, cy - arrow_size // 2),
-        (cx - arrow_size // 3, cy + arrow_size // 2),
-        (cx + arrow_size // 3, cy + arrow_size // 2)
-    ], fill=(255, 255, 255, 220))
+        (cx + arrow_size // 2, cy),
+        (cx - arrow_size // 2, cy - arrow_size // 3),
+        (cx - arrow_size // 2, cy + arrow_size // 3)
+    ], fill=(255, 255, 255, 180))
     return img
 
 
