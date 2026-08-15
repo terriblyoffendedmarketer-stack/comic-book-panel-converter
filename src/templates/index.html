@@ -342,6 +342,8 @@
 </div>
 
 <script>
+const CLOUD = {{ 'true' if cloud else 'false' }};
+
 // --- Tab switching ---
 document.querySelectorAll('.tab').forEach(tab => {
   tab.addEventListener('click', () => {
@@ -801,12 +803,14 @@ function showResults(container, results) {
     }
     container.appendChild(a);
   });
-  const openBtn = document.createElement('a');
-  openBtn.href = '#';
-  openBtn.className = 'open-folder';
-  openBtn.textContent = 'Open output folder in Finder';
-  openBtn.addEventListener('click', e => { e.preventDefault(); fetch('/open-output'); });
-  container.appendChild(openBtn);
+  if (!CLOUD) {
+    const openBtn = document.createElement('a');
+    openBtn.href = '#';
+    openBtn.className = 'open-folder';
+    openBtn.textContent = 'Open output folder in Finder';
+    openBtn.addEventListener('click', e => { e.preventDefault(); fetch('/open-output'); });
+    container.appendChild(openBtn);
+  }
 }
 
 function escapeHtml(s) {

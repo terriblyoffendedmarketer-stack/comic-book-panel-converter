@@ -9,7 +9,10 @@
 # - KCC for Kindle modifies sys.argv — wrapped to restore it.
 # - Port 5000 conflicts with macOS AirPlay Receiver — uses 8080.
 # - MangaDex rate limit is 5 req/sec — downloads sleep between pages.
+# - For cloud deploy: set DATA_DIR env var to persistent volume path.
+# - HOST defaults to 0.0.0.0 when RAILWAY_ENVIRONMENT or FLY_APP_NAME is set.
 
+import os
 import sys
 import json
 import uuid
@@ -30,6 +33,8 @@ from mangadex import search_manga, get_volumes, download_volume_as_cbz
 from PIL import Image
 import re
 
+CLOUD = bool(os.environ.get('RAILWAY_ENVIRONMENT') or os.environ.get('FLY_APP_NAME'))
+
 
 def natural_sort_key(s):
     return [int(c) if c.isdigit() else c.lower() for c in re.split(r'(\d+)', str(s))]
@@ -40,10 +45,11 @@ app = Flask(__name__,
             static_folder=str(ROOT / 'src' / 'static'))
 app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  # 500 MB
 
-INPUT_DIR = ROOT / 'input'
-OUTPUT_DIR = ROOT / 'output'
-INPUT_DIR.mkdir(exist_ok=True)
-OUTPUT_DIR.mkdir(exist_ok=True)
+DATA_DIR = Path(os.environ.get('DATA_DIR', str(ROOT)))
+INPUT_DIR = DATA_DIR / 'input'
+OUTPUT_DIR = DATA_DIR / 'output'
+INPUT_DIR.mkdir(parents=True, exist_ok=True)
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 jobs = {}
 
@@ -71,7 +77,7 @@ def convert_xteink_thirds(comic_path, manga, title, progress):
     out_dir.mkdir(parents=True, exist_ok=True)
 
     progress("Extracting pages...")
-    pages_dir = extract(comic_path, output_base=ROOT / 'output')
+    pages_dir = extract(comic_path, output_base=OUTPUT_DIR)
 
     skip = ("_debug", "_grouped")
     pages = sorted(
@@ -83,7 +89,7 @@ def convert_xteink_thirds(comic_path, manga, title, progress):
     if not pages:
         raise ValueError(f"No pages found in {pages_dir}")
 
-    views_dir = ROOT / 'output' / f"{pages_dir.name}_views"
+    views_dir = OUTPUT_DIR / f"{pages_dir.name}_views"
     views_dir.mkdir(parents=True, exist_ok=True)
 
     total_pages = len(pages)
@@ -281,7 +287,12 @@ def run_mangadex_download(job_id, manga_id, manga_title, volume_nums, auto_conve
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return render_template('index.html', cloud=CLOUD)
+
+
+@app.route('/health')
+def health():
+    return jsonify({'status': 'ok'})
 
 
 @app.route('/manifest.json')
@@ -375,7 +386,9 @@ def download_file(filepath):
 
 @app.route('/open-output')
 def open_output():
-    """Open output folder in Finder."""
+    """Open output folder in Finder (local only)."""
+    if CLOUD:
+        return jsonify({'error': 'Not available in cloud mode'}), 400
     import subprocess
     subprocess.Popen(['open', str(OUTPUT_DIR)])
     return jsonify({'ok': True})
@@ -520,11 +533,15 @@ def preview_image(epub_path, page_idx):
 
 
 if __name__ == '__main__':
-    import os
     port = int(os.environ.get('PORT', 8080))
-    host = os.environ.get('HOST', '127.0.0.1')
+    default_host = '0.0.0.0' if CLOUD else '127.0.0.1'
+    host = os.environ.get('HOST', default_host)
     print(f"\n  Comic Book Converter")
     print(f"  Open http://localhost:{port} in your browser\n")
     print(f"  Input:  {INPUT_DIR}/")
-    print(f"  Output: {OUTPUT_DIR}/\n")
+    print(f"  Output: {OUTPUT_DIR}/")
+    if CLOUD:
+        print(f"  Mode:   Cloud\n")
+    else:
+        print()
     app.run(host=host, port=port, debug=False)

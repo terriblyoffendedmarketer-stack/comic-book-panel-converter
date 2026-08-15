@@ -7,3 +7,4 @@ kindlecomicconverter
 flask
 requests
 mangadex-downloader
+gunicorn
