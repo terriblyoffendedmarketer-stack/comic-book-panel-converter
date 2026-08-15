@@ -30,7 +30,7 @@ Converts comic book files (CBZ/CBR/CB7) into e-reader optimized EPUBs for Kindle
 11. [x] EPUB previewer — exact device viewport with page navigation
 12. [x] Auto-start (launchd) — always available at localhost:8080
 13. [x] PWA manifest — installable as app from browser
-14. [ ] Cloud deployment (Railway/Fly.io) — access from any device
+14. [~] Cloud deployment (Railway) — Dockerfile + config ready, needs `railway up`
 15. [ ] Landscape-first mode — auto-detect dominant orientation
 16. [ ] PDF input support
 17. [ ] Mihon chapter combining — merge downloaded chapter CBZs into volumes
@@ -102,6 +102,11 @@ Direct MangaDex API v5 integration (no CLI wrapper):
 - `output/` — converted EPUBs organized by device (not in git)
 - `logs/` — web app logs when running via launchd (not in git)
 - `requirements.txt` — Python dependencies
+- `Dockerfile` — production container with all system deps
+- `railway.json` — Railway deployment config with health check
+- `Procfile` — gunicorn process definition
+- `wsgi.py` — WSGI entry point for gunicorn
+- `.dockerignore` — excludes venv, input, output from builds
 
 ## Target Devices
 
@@ -133,4 +138,13 @@ python src/web_app.py
 # CLI usage:
 python src/convert.py input/comic.cbz --device kindle --title "My Comic"
 python src/convert.py input/comic.cbz --device xteink --title "My Comic"
+
+# Deploy to Railway:
+# 1. Install Railway CLI: npm i -g @railway/cli
+# 2. Login: railway login
+# 3. Init project: railway init
+# 4. Add volume: railway volume add --mount /data
+# 5. Set env: railway variables set DATA_DIR=/data
+# 6. Deploy: railway up
+# Your app gets a public URL like https://comic-converter.up.railway.app
 ```
