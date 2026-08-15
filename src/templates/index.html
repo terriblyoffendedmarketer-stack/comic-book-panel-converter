@@ -3,169 +3,365 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#4a90d9">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/static/icon-192.png">
 <title>Comic Book Converter</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f5f5f5; --card: #fff; --border: #e0e0e0; --text: #222;
+    --muted: #888; --accent: #4a90d9; --accent-hover: #3a7bc8;
+    --selected-bg: #f0f6ff; --selected-border: #4a90d9;
+    --success-bg: #e8f5e9; --success-border: #a5d6a7; --success-text: #2e7d32;
+    --danger: #c00;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1a1a1a; --card: #252525; --border: #444; --text: #e0e0e0;
+      --muted: #999; --accent: #5a9fe0; --accent-hover: #4a8fd0;
+      --selected-bg: #2a3545; --selected-border: #5a9fe0;
+      --success-bg: #1b3a1b; --success-border: #3a6b3a; --success-text: #8bc88b;
+      --danger: #f55;
+    }
+  }
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-    background: #f5f5f5; color: #222; padding: 24px;
-    max-width: 640px; margin: 0 auto;
+    background: var(--bg); color: var(--text); padding: 16px;
+    max-width: 680px; margin: 0 auto;
   }
-  h1 { font-size: 22px; margin-bottom: 20px; }
-  h2 { font-size: 15px; color: #555; margin: 18px 0 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+  h1 { font-size: 20px; margin-bottom: 12px; }
+  h2 { font-size: 14px; color: var(--muted); margin: 14px 0 6px; text-transform: uppercase; letter-spacing: 0.5px; }
 
-  .drop-zone {
-    border: 2px dashed #bbb; border-radius: 10px; padding: 32px;
-    text-align: center; cursor: pointer; transition: all 0.2s;
-    background: #fff; margin-bottom: 16px;
+  /* Tabs */
+  .tabs {
+    display: flex; gap: 0; margin-bottom: 16px;
+    border-bottom: 2px solid var(--border);
   }
-  .drop-zone:hover, .drop-zone.dragover { border-color: #4a90d9; background: #f0f6ff; }
-  .drop-zone p { color: #888; font-size: 15px; }
-  .drop-zone .browse { color: #4a90d9; text-decoration: underline; cursor: pointer; }
+  .tab {
+    padding: 10px 20px; cursor: pointer; font-size: 14px; font-weight: 500;
+    color: var(--muted); border-bottom: 2px solid transparent;
+    margin-bottom: -2px; transition: all 0.15s;
+    background: none; border-top: none; border-left: none; border-right: none;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* Shared components */
+  .drop-zone {
+    border: 2px dashed var(--border); border-radius: 10px; padding: 28px;
+    text-align: center; cursor: pointer; transition: all 0.2s;
+    background: var(--card); margin-bottom: 12px;
+  }
+  .drop-zone:hover, .drop-zone.dragover { border-color: var(--accent); background: var(--selected-bg); }
+  .drop-zone p { color: var(--muted); font-size: 14px; }
+  .drop-zone .browse { color: var(--accent); text-decoration: underline; cursor: pointer; }
   input[type="file"] { display: none; }
 
-  .file-list { list-style: none; margin-bottom: 16px; }
+  .file-list { list-style: none; }
   .file-list li {
     display: flex; align-items: center; justify-content: space-between;
-    padding: 8px 12px; background: #fff; border: 1px solid #e0e0e0;
-    border-radius: 6px; margin-bottom: 4px; font-size: 14px;
+    padding: 7px 10px; background: var(--card); border: 1px solid var(--border);
+    border-radius: 6px; margin-bottom: 3px; font-size: 13px;
   }
-  .file-list li .size { color: #999; font-size: 12px; }
-  .file-list li .remove { color: #c00; cursor: pointer; font-size: 12px; margin-left: 8px; }
-  .file-list li.selected { border-color: #4a90d9; background: #f0f6ff; }
-  .file-list li label { display: flex; align-items: center; gap: 8px; cursor: pointer; flex: 1; }
+  .file-list li .size { color: var(--muted); font-size: 11px; }
+  .file-list li.selected { border-color: var(--selected-border); background: var(--selected-bg); }
+  .file-list li label { display: flex; align-items: center; gap: 6px; cursor: pointer; flex: 1; }
 
-  .device-options { margin-bottom: 16px; }
+  .device-options { margin-bottom: 12px; }
   .device-options label {
-    display: inline-flex; align-items: center; gap: 6px;
-    margin-right: 16px; font-size: 14px; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 5px;
+    margin-right: 14px; font-size: 13px; cursor: pointer;
   }
-  .device-options input[type="checkbox"] { width: 16px; height: 16px; }
+  .device-options input[type="checkbox"] { width: 15px; height: 15px; }
 
-  button.convert {
-    background: #4a90d9; color: #fff; border: none; border-radius: 8px;
-    padding: 12px 32px; font-size: 16px; cursor: pointer; width: 100%;
+  button.primary {
+    background: var(--accent); color: #fff; border: none; border-radius: 8px;
+    padding: 10px 28px; font-size: 15px; cursor: pointer; width: 100%;
     transition: background 0.2s;
   }
-  button.convert:hover { background: #3a7bc8; }
-  button.convert:disabled { background: #ccc; cursor: not-allowed; }
+  button.primary:hover { background: var(--accent-hover); }
+  button.primary:disabled { background: var(--border); cursor: not-allowed; color: var(--muted); }
 
-  .progress {
-    margin-top: 16px; padding: 12px; background: #fff;
-    border: 1px solid #e0e0e0; border-radius: 8px; display: none;
+  .progress-box {
+    margin-top: 12px; padding: 10px; background: var(--card);
+    border: 1px solid var(--border); border-radius: 8px; display: none;
   }
-  .progress .spinner {
-    display: inline-block; width: 14px; height: 14px;
-    border: 2px solid #ddd; border-top-color: #4a90d9;
+  .spinner {
+    display: inline-block; width: 13px; height: 13px;
+    border: 2px solid var(--border); border-top-color: var(--accent);
     border-radius: 50%; animation: spin 0.8s linear infinite;
-    margin-right: 8px; vertical-align: middle;
+    margin-right: 6px; vertical-align: middle;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
-  .progress .log { font-size: 13px; color: #555; margin-top: 8px; max-height: 120px; overflow-y: auto; }
-  .progress .log div { padding: 2px 0; }
+  .log { font-size: 12px; color: var(--muted); margin-top: 6px; max-height: 150px; overflow-y: auto; }
+  .log div { padding: 1px 0; }
 
-  .results {
-    margin-top: 16px; display: none;
-  }
+  .results { margin-top: 12px; display: none; }
   .results a {
-    display: block; padding: 12px 16px; background: #e8f5e9;
-    border: 1px solid #a5d6a7; border-radius: 8px; margin-bottom: 6px;
-    text-decoration: none; color: #2e7d32; font-size: 14px;
+    display: block; padding: 10px 14px; background: var(--success-bg);
+    border: 1px solid var(--success-border); border-radius: 8px; margin-bottom: 5px;
+    text-decoration: none; color: var(--success-text); font-size: 13px;
     transition: background 0.2s;
   }
-  .results a:hover { background: #c8e6c9; }
+  .results a:hover { opacity: 0.85; }
   .results .open-folder {
-    background: #fff; border-color: #ddd; color: #555;
-    text-align: center; font-size: 13px;
+    background: var(--card); border-color: var(--border); color: var(--muted);
+    text-align: center; font-size: 12px;
   }
 
-  .error { color: #c00; margin-top: 8px; font-size: 14px; }
+  .error { color: var(--danger); margin-top: 6px; font-size: 13px; }
 
-  .existing-files { margin-bottom: 16px; }
-  .existing-files .empty { color: #999; font-size: 13px; font-style: italic; }
-  .file-list-scroll { max-height: 300px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 8px; }
-  .file-list-scroll .file-list { margin-bottom: 0; }
+  .file-list-scroll { max-height: 280px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; }
   .file-list-scroll .file-list li:last-child { margin-bottom: 0; }
   .select-bar {
     display: flex; justify-content: space-between; align-items: center;
-    margin-bottom: 6px; font-size: 13px; color: #777;
+    margin-bottom: 4px; font-size: 12px; color: var(--muted);
   }
-  .select-bar a { color: #4a90d9; cursor: pointer; text-decoration: none; }
+  .select-bar a { color: var(--accent); cursor: pointer; text-decoration: none; }
   .select-bar a:hover { text-decoration: underline; }
 
-  @media (prefers-color-scheme: dark) {
-    body { background: #1a1a1a; color: #e0e0e0; }
-    .drop-zone { background: #252525; border-color: #555; }
-    .drop-zone:hover, .drop-zone.dragover { border-color: #5a9fe0; background: #2a3545; }
-    .drop-zone p { color: #999; }
-    .file-list li { background: #252525; border-color: #444; }
-    .file-list li.selected { border-color: #5a9fe0; background: #2a3545; }
-    .file-list-scroll { border-color: #444; }
-    .select-bar { color: #888; }
-    .select-bar a { color: #5a9fe0; }
-    .progress { background: #252525; border-color: #444; }
-    .results a { background: #1b3a1b; border-color: #3a6b3a; color: #8bc88b; }
-    .results a:hover { background: #254025; }
-    .results .open-folder { background: #252525; border-color: #444; color: #aaa; }
-    button.convert { background: #5a9fe0; }
-    button.convert:hover { background: #4a8fd0; }
-    h2 { color: #999; }
+  /* MangaDex */
+  .search-box {
+    display: flex; gap: 8px; margin-bottom: 12px;
   }
+  .search-box input {
+    flex: 1; padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px;
+    font-size: 14px; background: var(--card); color: var(--text);
+    outline: none;
+  }
+  .search-box input:focus { border-color: var(--accent); }
+  .search-box button {
+    padding: 9px 18px; background: var(--accent); color: #fff; border: none;
+    border-radius: 8px; cursor: pointer; font-size: 14px; white-space: nowrap;
+  }
+  .search-box button:hover { background: var(--accent-hover); }
+
+  .manga-results { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; margin-bottom: 14px; }
+  .manga-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+    overflow: hidden; cursor: pointer; transition: all 0.15s;
+  }
+  .manga-card:hover { border-color: var(--accent); transform: translateY(-1px); }
+  .manga-card.selected { border-color: var(--accent); background: var(--selected-bg); }
+  .manga-card img { width: 100%; height: 180px; object-fit: cover; display: block; }
+  .manga-card .info { padding: 8px; }
+  .manga-card .title { font-size: 13px; font-weight: 500; line-height: 1.3; }
+  .manga-card .meta { font-size: 11px; color: var(--muted); margin-top: 3px; }
+
+  .volume-list { margin-bottom: 12px; }
+  .volume-list label {
+    display: flex; align-items: center; gap: 8px; padding: 6px 10px;
+    background: var(--card); border: 1px solid var(--border); border-radius: 6px;
+    margin-bottom: 3px; font-size: 13px; cursor: pointer;
+  }
+  .volume-list label:hover { border-color: var(--accent); }
+  .volume-list .vol-meta { color: var(--muted); font-size: 11px; margin-left: auto; }
+
+  .auto-convert-opt {
+    margin-bottom: 10px; font-size: 13px;
+    display: flex; align-items: center; gap: 6px;
+  }
+
+  /* Preview */
+  .preview-select { margin-bottom: 12px; }
+  .preview-select select {
+    width: 100%; padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px;
+    font-size: 14px; background: var(--card); color: var(--text);
+  }
+
+  .preview-viewport {
+    margin: 0 auto; background: #000; position: relative;
+    overflow: hidden; border-radius: 4px;
+    display: none;
+  }
+  .preview-viewport img {
+    width: 100%; height: 100%; object-fit: contain;
+  }
+  .preview-nav {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-top: 8px; font-size: 13px;
+  }
+  .preview-nav button {
+    padding: 6px 16px; background: var(--card); border: 1px solid var(--border);
+    border-radius: 6px; cursor: pointer; font-size: 13px; color: var(--text);
+  }
+  .preview-nav button:hover { border-color: var(--accent); }
+  .preview-nav button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .preview-nav .page-info { color: var(--muted); }
+
+  .device-selector {
+    display: flex; gap: 8px; margin-bottom: 10px;
+  }
+  .device-btn {
+    flex: 1; padding: 8px; text-align: center; background: var(--card);
+    border: 1px solid var(--border); border-radius: 6px; cursor: pointer;
+    font-size: 13px; color: var(--text); transition: all 0.15s;
+  }
+  .device-btn:hover { border-color: var(--accent); }
+  .device-btn.active { border-color: var(--accent); background: var(--selected-bg); color: var(--accent); font-weight: 500; }
+  .device-btn .dims { font-size: 11px; color: var(--muted); display: block; margin-top: 2px; }
+
+  .preview-upload {
+    margin-bottom: 12px;
+  }
+  .preview-upload label {
+    display: inline-block; padding: 8px 16px; background: var(--card);
+    border: 1px solid var(--border); border-radius: 6px; cursor: pointer;
+    font-size: 13px; color: var(--accent); transition: all 0.15s;
+  }
+  .preview-upload label:hover { border-color: var(--accent); }
 </style>
 </head>
 <body>
 
 <h1>Comic Book Converter</h1>
 
-<div class="drop-zone" id="dropZone">
-  <p>Drop comic files here or <span class="browse">browse</span></p>
-  <p style="font-size:12px; color:#aaa; margin-top:6px">.cbz, .cbr, .cb7</p>
-  <input type="file" id="fileInput" accept=".cbz,.cbr,.cb7" multiple>
+<div class="tabs">
+  <button class="tab active" data-tab="convert">Convert</button>
+  <button class="tab" data-tab="mangadex">MangaDex</button>
+  <button class="tab" data-tab="preview">Preview</button>
 </div>
 
-<h2>Output format</h2>
-<div class="device-options">
-  <label><input type="checkbox" id="devXteink" checked> XTe Ink X4</label>
-  <label><input type="checkbox" id="devKindle"> Kindle Paperwhite</label>
-</div>
-
-<div class="existing-files">
-  <div class="select-bar">
-    <span id="fileCount">Files in input/</span>
-    <span><a id="selectAll">Select all</a> · <a id="selectNone">Clear</a></span>
+<!-- CONVERT TAB -->
+<div class="tab-content active" id="tab-convert">
+  <div class="drop-zone" id="dropZone">
+    <p>Drop comic files here or <span class="browse">browse</span></p>
+    <p style="font-size:11px; color:var(--muted); margin-top:4px">.cbz, .cbr, .cb7</p>
+    <input type="file" id="fileInput" accept=".cbz,.cbr,.cb7" multiple>
   </div>
-  <div class="file-list-scroll">
-    <ul class="file-list" id="existingFiles">
-      <li class="empty">Loading...</li>
-    </ul>
+
+  <h2>Output format</h2>
+  <div class="device-options">
+    <label><input type="checkbox" id="devXteink" checked> XTe Ink X4</label>
+    <label><input type="checkbox" id="devKindle"> Kindle Paperwhite</label>
+  </div>
+
+  <div class="existing-files">
+    <div class="select-bar">
+      <span id="fileCount">Files in input/</span>
+      <span><a id="selectAll">Select all</a> · <a id="selectNone">Clear</a></span>
+    </div>
+    <div class="file-list-scroll">
+      <ul class="file-list" id="existingFiles">
+        <li style="color:var(--muted); font-style:italic">Loading...</li>
+      </ul>
+    </div>
+  </div>
+
+  <button class="primary" id="convertBtn" disabled style="margin-top:12px">Convert</button>
+
+  <div class="progress-box" id="convertProgress">
+    <span class="spinner"></span>
+    <span id="convertProgressText">Starting...</span>
+    <div class="log" id="convertLog"></div>
+  </div>
+
+  <div class="results" id="convertResults"></div>
+  <div class="error" id="convertError"></div>
+</div>
+
+<!-- MANGADEX TAB -->
+<div class="tab-content" id="tab-mangadex">
+  <div class="search-box">
+    <input type="text" id="mdSearch" placeholder="Search MangaDex...">
+    <button id="mdSearchBtn">Search</button>
+  </div>
+
+  <div class="manga-results" id="mdResults"></div>
+
+  <div id="mdVolumes" style="display:none">
+    <h2 id="mdSelectedTitle">Volumes</h2>
+    <div class="select-bar">
+      <span id="mdVolCount"></span>
+      <span><a id="mdSelectAllVols">Select all</a> · <a id="mdSelectNoneVols">Clear</a></span>
+    </div>
+    <div class="volume-list" id="mdVolumeList"></div>
+
+    <label class="auto-convert-opt">
+      <input type="checkbox" id="mdAutoConvert" checked>
+      Auto-convert after download
+    </label>
+
+    <div class="device-options" id="mdDeviceOpts">
+      <label><input type="checkbox" id="mdDevXteink" checked> XTe Ink X4</label>
+      <label><input type="checkbox" id="mdDevKindle"> Kindle Paperwhite</label>
+    </div>
+
+    <button class="primary" id="mdDownloadBtn" disabled>Download</button>
+  </div>
+
+  <div class="progress-box" id="mdProgress">
+    <span class="spinner"></span>
+    <span id="mdProgressText">Starting...</span>
+    <div class="log" id="mdLog"></div>
+  </div>
+
+  <div class="results" id="mdResultsBox"></div>
+  <div class="error" id="mdError"></div>
+</div>
+
+<!-- PREVIEW TAB -->
+<div class="tab-content" id="tab-preview">
+  <h2>Device viewport</h2>
+  <div class="device-selector">
+    <button class="device-btn active" data-device="xteink" data-w="480" data-h="800">
+      XTe Ink X4<span class="dims">480 x 800</span>
+    </button>
+    <button class="device-btn" data-device="kindle" data-w="1072" data-h="1448">
+      Kindle PW<span class="dims">1072 x 1448</span>
+    </button>
+  </div>
+
+  <h2>Select EPUB</h2>
+  <div class="preview-select">
+    <select id="previewSelect">
+      <option value="">Loading...</option>
+    </select>
+  </div>
+
+  <div class="preview-upload">
+    <label>
+      Or upload an EPUB
+      <input type="file" id="previewFileInput" accept=".epub" style="display:none">
+    </label>
+  </div>
+
+  <div class="preview-viewport" id="previewViewport">
+    <img id="previewImg" src="" alt="Preview">
+  </div>
+  <div class="preview-nav" id="previewNav" style="display:none">
+    <button id="prevPage">Prev</button>
+    <span class="page-info" id="pageInfo">1 / 1</span>
+    <button id="nextPage">Next</button>
   </div>
 </div>
-
-<button class="convert" id="convertBtn" disabled>Convert</button>
-
-<div class="progress" id="progressBox">
-  <span class="spinner"></span>
-  <span id="progressText">Starting...</span>
-  <div class="log" id="progressLog"></div>
-</div>
-
-<div class="results" id="resultsBox"></div>
-<div class="error" id="errorBox"></div>
 
 <script>
+// --- Tab switching ---
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+    if (tab.dataset.tab === 'preview') loadPreviewList();
+    if (tab.dataset.tab === 'convert') loadExistingFiles();
+  });
+});
+
+// ===== CONVERT TAB =====
 const dropZone = document.getElementById('dropZone');
 const fileInput = document.getElementById('fileInput');
 const existingFiles = document.getElementById('existingFiles');
 const convertBtn = document.getElementById('convertBtn');
-const progressBox = document.getElementById('progressBox');
-const progressText = document.getElementById('progressText');
-const progressLog = document.getElementById('progressLog');
-const resultsBox = document.getElementById('resultsBox');
-const errorBox = document.getElementById('errorBox');
 
 let selectedFiles = new Set();
 
-// Drop zone
 dropZone.addEventListener('click', () => fileInput.click());
 dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
 dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
@@ -187,7 +383,7 @@ async function uploadFiles(files) {
       loadExistingFiles();
     }
   } catch (e) {
-    errorBox.textContent = 'Upload failed: ' + e.message;
+    document.getElementById('convertError').textContent = 'Upload failed: ' + e.message;
   }
 }
 
@@ -197,7 +393,7 @@ async function loadExistingFiles() {
     const files = await res.json();
     existingFiles.innerHTML = '';
     if (files.length === 0) {
-      existingFiles.innerHTML = '<li class="empty">No comic files in input/ folder</li>';
+      existingFiles.innerHTML = '<li style="color:var(--muted); font-style:italic">No comic files in input/</li>';
       updateConvertBtn();
       return;
     }
@@ -216,11 +412,11 @@ async function loadExistingFiles() {
     document.getElementById('fileCount').textContent = `${files.length} files in input/`;
     updateConvertBtn();
   } catch (e) {
-    existingFiles.innerHTML = '<li class="empty">Could not load files</li>';
+    existingFiles.innerHTML = '<li style="color:var(--muted)">Could not load files</li>';
   }
 }
 
-function setAllFiles(checked) {
+function setAllConvertFiles(checked) {
   existingFiles.querySelectorAll('input[type="checkbox"]').forEach(cb => {
     cb.checked = checked;
     const li = cb.closest('li');
@@ -240,16 +436,21 @@ function updateConvertBtn() {
 
 document.getElementById('devXteink').addEventListener('change', updateConvertBtn);
 document.getElementById('devKindle').addEventListener('change', updateConvertBtn);
-document.getElementById('selectAll').addEventListener('click', () => setAllFiles(true));
-document.getElementById('selectNone').addEventListener('click', () => setAllFiles(false));
+document.getElementById('selectAll').addEventListener('click', () => setAllConvertFiles(true));
+document.getElementById('selectNone').addEventListener('click', () => setAllConvertFiles(false));
 
-// Convert
 convertBtn.addEventListener('click', async () => {
   const devices = [];
   if (document.getElementById('devXteink').checked) devices.push('xteink');
   if (document.getElementById('devKindle').checked) devices.push('kindle');
 
   convertBtn.disabled = true;
+  const progressBox = document.getElementById('convertProgress');
+  const progressText = document.getElementById('convertProgressText');
+  const progressLog = document.getElementById('convertLog');
+  const resultsBox = document.getElementById('convertResults');
+  const errorBox = document.getElementById('convertError');
+
   progressBox.style.display = 'block';
   resultsBox.style.display = 'none';
   resultsBox.innerHTML = '';
@@ -270,67 +471,348 @@ convertBtn.addEventListener('click', async () => {
         body: JSON.stringify({ filename, devices })
       });
       const { job_id, error } = await res.json();
-      if (error) { addLog(error); continue; }
-
-      // Poll status
-      let done = false;
-      let lastMsgCount = 0;
-      while (!done) {
-        await new Promise(r => setTimeout(r, 1000));
-        const statusRes = await fetch(`/status/${job_id}`);
-        const job = await statusRes.json();
-
-        // Show new messages
-        if (job.messages) {
-          for (let m = lastMsgCount; m < job.messages.length; m++) {
-            addLog(job.messages[m]);
-          }
-          lastMsgCount = job.messages.length;
-          if (job.messages.length > 0) {
-            progressText.textContent = job.messages[job.messages.length - 1];
-          }
-        }
-
-        if (job.status === 'done') {
-          allResults = allResults.concat(job.results || []);
-          done = true;
-        } else if (job.status === 'error') {
-          addLog('Error: ' + (job.error || 'Unknown'));
-          done = true;
-        }
-      }
+      if (error) { addLogEntry(progressLog, error); continue; }
+      allResults = allResults.concat(await pollJob(job_id, progressText, progressLog));
     } catch (e) {
-      addLog('Error: ' + e.message);
+      addLogEntry(progressLog, 'Error: ' + e.message);
     }
   }
 
-  // Show results
   progressBox.style.display = 'none';
-  if (allResults.length > 0) {
-    resultsBox.style.display = 'block';
-    allResults.forEach(r => {
-      const a = document.createElement('a');
-      a.href = `/output/${r.folder}/${r.filename}`;
-      a.textContent = `Download: ${r.filename} (${r.device})`;
-      a.download = r.filename;
-      resultsBox.appendChild(a);
-    });
-    const openBtn = document.createElement('a');
-    openBtn.href = '#';
-    openBtn.className = 'open-folder';
-    openBtn.textContent = 'Open output folder in Finder';
-    openBtn.addEventListener('click', e => { e.preventDefault(); fetch('/open-output'); });
-    resultsBox.appendChild(openBtn);
-  }
-
+  showResults(resultsBox, allResults);
   convertBtn.disabled = false;
 });
 
-function addLog(msg) {
+// ===== MANGADEX TAB =====
+let selectedManga = null;
+let selectedVolumes = new Set();
+
+document.getElementById('mdSearchBtn').addEventListener('click', searchMangaDex);
+document.getElementById('mdSearch').addEventListener('keydown', e => { if (e.key === 'Enter') searchMangaDex(); });
+
+async function searchMangaDex() {
+  const q = document.getElementById('mdSearch').value.trim();
+  if (!q) return;
+
+  const container = document.getElementById('mdResults');
+  container.innerHTML = '<div style="color:var(--muted); padding:20px; text-align:center; grid-column:1/-1">Searching...</div>';
+  document.getElementById('mdVolumes').style.display = 'none';
+  document.getElementById('mdError').textContent = '';
+
+  try {
+    const res = await fetch(`/mangadex/search?q=${encodeURIComponent(q)}`);
+    const results = await res.json();
+    if (results.error) { document.getElementById('mdError').textContent = results.error; container.innerHTML = ''; return; }
+
+    container.innerHTML = '';
+    if (results.length === 0) {
+      container.innerHTML = '<div style="color:var(--muted); padding:20px; text-align:center; grid-column:1/-1">No results found</div>';
+      return;
+    }
+
+    results.forEach(m => {
+      const card = document.createElement('div');
+      card.className = 'manga-card';
+      card.innerHTML = `
+        ${m.cover_url ? `<img src="${m.cover_url}" alt="" loading="lazy" onerror="this.style.display='none'">` : ''}
+        <div class="info">
+          <div class="title">${escapeHtml(m.title)}</div>
+          <div class="meta">${m.status}${m.year ? ' · ' + m.year : ''}</div>
+        </div>`;
+      card.addEventListener('click', () => selectManga(m, card));
+      container.appendChild(card);
+    });
+  } catch (e) {
+    document.getElementById('mdError').textContent = 'Search failed: ' + e.message;
+    container.innerHTML = '';
+  }
+}
+
+async function selectManga(manga, card) {
+  selectedManga = manga;
+  selectedVolumes.clear();
+
+  document.querySelectorAll('.manga-card').forEach(c => c.classList.remove('selected'));
+  card.classList.add('selected');
+
+  const volSection = document.getElementById('mdVolumes');
+  volSection.style.display = 'block';
+  document.getElementById('mdSelectedTitle').textContent = manga.title + ' — Volumes';
+
+  const volList = document.getElementById('mdVolumeList');
+  volList.innerHTML = '<div style="color:var(--muted); padding:10px">Loading volumes...</div>';
+
+  try {
+    const res = await fetch(`/mangadex/volumes/${manga.id}`);
+    const volumes = await res.json();
+    if (volumes.error) { volList.innerHTML = `<div style="color:var(--danger)">${volumes.error}</div>`; return; }
+
+    volList.innerHTML = '';
+    document.getElementById('mdVolCount').textContent = `${volumes.length} volumes`;
+
+    if (volumes.length === 0) {
+      volList.innerHTML = '<div style="color:var(--muted); padding:10px">No english volumes available</div>';
+      return;
+    }
+
+    volumes.forEach(v => {
+      const label = document.createElement('label');
+      label.innerHTML = `
+        <input type="checkbox" value="${v.volume}">
+        Vol. ${v.volume}
+        <span class="vol-meta">${v.chapter_range} (${v.chapter_count} ch)</span>`;
+      label.querySelector('input').addEventListener('change', e => {
+        if (e.target.checked) selectedVolumes.add(v.volume);
+        else selectedVolumes.delete(v.volume);
+        updateMdDownloadBtn();
+      });
+      volList.appendChild(label);
+    });
+  } catch (e) {
+    volList.innerHTML = `<div style="color:var(--danger)">Failed to load volumes</div>`;
+  }
+}
+
+function updateMdDownloadBtn() {
+  const btn = document.getElementById('mdDownloadBtn');
+  btn.disabled = selectedVolumes.size === 0;
+  btn.textContent = selectedVolumes.size > 0
+    ? `Download ${selectedVolumes.size} volume${selectedVolumes.size > 1 ? 's' : ''}`
+    : 'Download';
+}
+
+document.getElementById('mdSelectAllVols').addEventListener('click', () => {
+  document.querySelectorAll('#mdVolumeList input[type="checkbox"]').forEach(cb => {
+    cb.checked = true; selectedVolumes.add(cb.value);
+  });
+  updateMdDownloadBtn();
+});
+document.getElementById('mdSelectNoneVols').addEventListener('click', () => {
+  document.querySelectorAll('#mdVolumeList input[type="checkbox"]').forEach(cb => {
+    cb.checked = false;
+  });
+  selectedVolumes.clear();
+  updateMdDownloadBtn();
+});
+
+document.getElementById('mdDownloadBtn').addEventListener('click', async () => {
+  if (!selectedManga || selectedVolumes.size === 0) return;
+
+  const btn = document.getElementById('mdDownloadBtn');
+  btn.disabled = true;
+
+  const autoConvert = document.getElementById('mdAutoConvert').checked;
+  const devices = [];
+  if (document.getElementById('mdDevXteink').checked) devices.push('xteink');
+  if (document.getElementById('mdDevKindle').checked) devices.push('kindle');
+
+  const progressBox = document.getElementById('mdProgress');
+  const progressText = document.getElementById('mdProgressText');
+  const progressLog = document.getElementById('mdLog');
+  const resultsBox = document.getElementById('mdResultsBox');
+
+  progressBox.style.display = 'block';
+  resultsBox.style.display = 'none';
+  resultsBox.innerHTML = '';
+  progressLog.innerHTML = '';
+  progressText.textContent = 'Starting download...';
+
+  try {
+    const res = await fetch('/mangadex/download', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        manga_id: selectedManga.id,
+        manga_title: selectedManga.title,
+        volumes: [...selectedVolumes],
+        auto_convert: autoConvert,
+        devices: devices,
+      })
+    });
+    const { job_id, error } = await res.json();
+    if (error) { document.getElementById('mdError').textContent = error; progressBox.style.display = 'none'; btn.disabled = false; return; }
+
+    const results = await pollJob(job_id, progressText, progressLog);
+    progressBox.style.display = 'none';
+    showResults(resultsBox, results);
+  } catch (e) {
+    document.getElementById('mdError').textContent = 'Download failed: ' + e.message;
+    progressBox.style.display = 'none';
+  }
+
+  btn.disabled = false;
+});
+
+// ===== PREVIEW TAB =====
+let previewPages = [];
+let previewIdx = 0;
+let previewDevice = { w: 480, h: 800 };
+
+document.querySelectorAll('.device-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.device-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    previewDevice = { w: parseInt(btn.dataset.w), h: parseInt(btn.dataset.h) };
+    updatePreviewViewport();
+  });
+});
+
+async function loadPreviewList() {
+  const select = document.getElementById('previewSelect');
+  try {
+    const res = await fetch('/preview/list');
+    const epubs = await res.json();
+    select.innerHTML = '<option value="">Choose an EPUB...</option>';
+    epubs.forEach(e => {
+      const opt = document.createElement('option');
+      opt.value = e.path;
+      opt.textContent = `${e.name} (${e.folder}) — ${e.size}`;
+      select.appendChild(opt);
+    });
+  } catch (e) {
+    select.innerHTML = '<option value="">Failed to load</option>';
+  }
+}
+
+document.getElementById('previewSelect').addEventListener('change', async (e) => {
+  const path = e.target.value;
+  if (!path) { hidePreview(); return; }
+  await loadPreviewPages(path);
+});
+
+document.getElementById('previewFileInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  const form = new FormData();
+  form.append('files', file);
+  try {
+    const uploadRes = await fetch('/upload', { method: 'POST', body: form });
+    await uploadRes.json();
+
+    const epubName = file.name;
+    // For preview, we need it in output - copy from input to a temp preview location
+    // Actually let's just handle it differently: upload EPUBs go to output for preview
+  } catch (err) {}
+
+  // For now, show a message - EPUB preview needs the file in output/
+  // The user should select from the dropdown after conversion
+});
+
+async function loadPreviewPages(epubPath) {
+  try {
+    const res = await fetch(`/preview/pages/${epubPath}`);
+    previewPages = await res.json();
+    previewIdx = 0;
+    if (previewPages.length > 0) {
+      showPreview();
+      renderPreviewPage();
+    }
+  } catch (e) {
+    hidePreview();
+  }
+}
+
+function showPreview() {
+  document.getElementById('previewViewport').style.display = 'block';
+  document.getElementById('previewNav').style.display = 'flex';
+  updatePreviewViewport();
+}
+
+function hidePreview() {
+  document.getElementById('previewViewport').style.display = 'none';
+  document.getElementById('previewNav').style.display = 'none';
+  previewPages = [];
+}
+
+function updatePreviewViewport() {
+  const vp = document.getElementById('previewViewport');
+  const maxW = Math.min(previewDevice.w, 640);
+  const scale = maxW / previewDevice.w;
+  vp.style.width = maxW + 'px';
+  vp.style.height = Math.round(previewDevice.h * scale) + 'px';
+  if (previewPages.length > 0) renderPreviewPage();
+}
+
+function renderPreviewPage() {
+  const img = document.getElementById('previewImg');
+  img.src = previewPages[previewIdx].url;
+  document.getElementById('pageInfo').textContent = `${previewIdx + 1} / ${previewPages.length}`;
+  document.getElementById('prevPage').disabled = previewIdx === 0;
+  document.getElementById('nextPage').disabled = previewIdx >= previewPages.length - 1;
+}
+
+document.getElementById('prevPage').addEventListener('click', () => {
+  if (previewIdx > 0) { previewIdx--; renderPreviewPage(); }
+});
+document.getElementById('nextPage').addEventListener('click', () => {
+  if (previewIdx < previewPages.length - 1) { previewIdx++; renderPreviewPage(); }
+});
+
+// Keyboard nav for preview
+document.addEventListener('keydown', e => {
+  if (document.getElementById('tab-preview').classList.contains('active') && previewPages.length > 0) {
+    if (e.key === 'ArrowLeft' && previewIdx > 0) { previewIdx--; renderPreviewPage(); }
+    if (e.key === 'ArrowRight' && previewIdx < previewPages.length - 1) { previewIdx++; renderPreviewPage(); }
+  }
+});
+
+// ===== SHARED HELPERS =====
+async function pollJob(jobId, textEl, logEl) {
+  let lastMsgCount = 0;
+  while (true) {
+    await new Promise(r => setTimeout(r, 1000));
+    const statusRes = await fetch(`/status/${jobId}`);
+    const job = await statusRes.json();
+
+    if (job.messages) {
+      for (let m = lastMsgCount; m < job.messages.length; m++) {
+        addLogEntry(logEl, job.messages[m]);
+      }
+      lastMsgCount = job.messages.length;
+      if (job.messages.length > 0) textEl.textContent = job.messages[job.messages.length - 1];
+    }
+
+    if (job.status === 'done') return job.results || [];
+    if (job.status === 'error') { addLogEntry(logEl, 'Error: ' + (job.error || 'Unknown')); return []; }
+  }
+}
+
+function addLogEntry(logEl, msg) {
   const div = document.createElement('div');
   div.textContent = msg;
-  progressLog.appendChild(div);
-  progressLog.scrollTop = progressLog.scrollHeight;
+  logEl.appendChild(div);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+function showResults(container, results) {
+  if (results.length === 0) return;
+  container.style.display = 'block';
+  results.forEach(r => {
+    const a = document.createElement('a');
+    if (r.folder) {
+      a.href = `/output/${r.folder}/${r.filename}`;
+      a.textContent = `${r.filename} (${r.device})`;
+      a.download = r.filename;
+    } else {
+      a.href = '#';
+      a.textContent = `Downloaded: ${r.filename}`;
+      a.style.cursor = 'default';
+    }
+    container.appendChild(a);
+  });
+  const openBtn = document.createElement('a');
+  openBtn.href = '#';
+  openBtn.className = 'open-folder';
+  openBtn.textContent = 'Open output folder in Finder';
+  openBtn.addEventListener('click', e => { e.preventDefault(); fetch('/open-output'); });
+  container.appendChild(openBtn);
+}
+
+function escapeHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
 }
 
 // Init

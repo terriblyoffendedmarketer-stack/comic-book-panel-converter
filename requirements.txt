@@ -5,3 +5,5 @@ opencv-python-headless
 ebooklib
 kindlecomicconverter
 flask
+requests
+mangadex-downloader

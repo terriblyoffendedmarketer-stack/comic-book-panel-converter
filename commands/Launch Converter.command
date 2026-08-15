@@ -30,7 +30,7 @@ echo "  To stop: close this window or press Ctrl+C"
 echo ""
 
 # Open browser after a short delay (server needs a moment to start)
-(sleep 1 && open http://localhost:5000) &
+(sleep 1 && open http://localhost:8080) &
 
 # Start the web app
 python src/web_app.py

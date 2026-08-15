@@ -1,12 +1,14 @@
-# web_app.py — Simple web UI for comic book conversion
-# Usage: python src/web_app.py (then open http://localhost:5000)
-# Requires: flask, plus all pipeline dependencies
+# web_app.py — Web UI for comic book conversion + MangaDex download
+# Usage: python src/web_app.py (then open http://localhost:8080)
+# Requires: flask, requests, plus all pipeline dependencies
 #
 # Gotchas:
 # - Must run from project root (paths are relative to it).
 # - Large files (100+ MB) are fine — Flask handles chunked uploads.
 # - Conversion runs in a background thread; frontend polls /status.
 # - KCC for Kindle modifies sys.argv — wrapped to restore it.
+# - Port 5000 conflicts with macOS AirPlay Receiver — uses 8080.
+# - MangaDex rate limit is 5 req/sec — downloads sleep between pages.
 
 import sys
 import json
@@ -24,6 +26,7 @@ from extract import extract, detect_reading_direction
 from detect_panels import detect_panels
 from split_page import split_page, process_for_eink, process_cover_for_eink
 from build_epub import build_epub
+from mangadex import search_manga, get_volumes, download_volume_as_cbz
 from PIL import Image
 import re
 
@@ -32,7 +35,9 @@ def natural_sort_key(s):
     return [int(c) if c.isdigit() else c.lower() for c in re.split(r'(\d+)', str(s))]
 
 
-app = Flask(__name__, template_folder=str(ROOT / 'src' / 'templates'))
+app = Flask(__name__,
+            template_folder=str(ROOT / 'src' / 'templates'),
+            static_folder=str(ROOT / 'src' / 'static'))
 app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  # 500 MB
 
 INPUT_DIR = ROOT / 'input'
@@ -208,9 +213,91 @@ def run_conversion(job_id, filepath, devices):
         progress(f"Error: {e}")
 
 
+def run_mangadex_download(job_id, manga_id, manga_title, volume_nums, auto_convert, devices):
+    """Download manga volumes from MangaDex in background thread."""
+    job = jobs[job_id]
+
+    def progress(msg):
+        job['messages'].append(msg)
+
+    try:
+        progress(f"Fetching volume data for {manga_title}...")
+        all_volumes = get_volumes(manga_id)
+
+        downloaded_files = []
+        for vol_num in volume_nums:
+            if vol_num not in all_volumes:
+                progress(f"Volume {vol_num} not found, skipping...")
+                continue
+
+            vol_data = all_volumes[vol_num]
+            cbz_path = download_volume_as_cbz(
+                manga_id, manga_title, vol_num,
+                vol_data["chapters"], INPUT_DIR, progress
+            )
+            downloaded_files.append(cbz_path)
+
+        if auto_convert and downloaded_files and devices:
+            progress("Starting conversion...")
+            results = []
+            for cbz_path in downloaded_files:
+                title = cbz_path.stem
+                direction, reason = detect_reading_direction(cbz_path)
+                manga = (direction == 'rtl')
+                progress(f"Converting {title} ({'Manga' if manga else 'Western'})...")
+
+                if 'xteink' in devices:
+                    path = convert_xteink_thirds(cbz_path, manga, title, progress)
+                    if path:
+                        results.append({
+                            'device': 'XTe Ink X4',
+                            'filename': Path(path).name,
+                            'folder': 'XTe Ink',
+                            'path': path,
+                        })
+
+                if 'kindle' in devices:
+                    path = convert_kindle(cbz_path, manga, title, progress)
+                    if path:
+                        results.append({
+                            'device': 'Kindle Paperwhite',
+                            'filename': Path(path).name,
+                            'folder': 'Kindle',
+                            'path': path,
+                        })
+
+            job['results'] = results
+        else:
+            job['results'] = [{'device': 'Downloaded', 'filename': p.name, 'folder': '', 'path': str(p)} for p in downloaded_files]
+
+        job['status'] = 'done'
+        progress("Done!")
+
+    except Exception as e:
+        job['status'] = 'error'
+        job['error'] = str(e)
+        progress(f"Error: {e}")
+
+
 @app.route('/')
 def index():
     return render_template('index.html')
+
+
+@app.route('/manifest.json')
+def manifest():
+    return jsonify({
+        "name": "Comic Book Converter",
+        "short_name": "ComicConv",
+        "start_url": "/",
+        "display": "standalone",
+        "background_color": "#1a1a1a",
+        "theme_color": "#4a90d9",
+        "icons": [
+            {"src": "/static/icon-192.png", "sizes": "192x192", "type": "image/png"},
+            {"src": "/static/icon-512.png", "sizes": "512x512", "type": "image/png"},
+        ]
+    })
 
 
 @app.route('/files')
@@ -294,11 +381,150 @@ def open_output():
     return jsonify({'ok': True})
 
 
+# --- MangaDex routes ---
+
+@app.route('/mangadex/search')
+def mangadex_search():
+    """Search MangaDex for manga."""
+    q = request.args.get('q', '').strip()
+    if not q:
+        return jsonify([])
+    try:
+        results = search_manga(q)
+        return jsonify(results)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/mangadex/volumes/<manga_id>')
+def mangadex_volumes(manga_id):
+    """Get available volumes for a manga."""
+    try:
+        volumes = get_volumes(manga_id)
+        vol_list = []
+        for vol_num in sorted(volumes.keys(), key=lambda x: (x == 'Extras', float(x) if x != 'Extras' and x.replace('.', '').isdigit() else 999)):
+            vol = volumes[vol_num]
+            ch_range = f"Ch. {vol['chapters'][0]['chapter']}"
+            if len(vol['chapters']) > 1:
+                ch_range += f"–{vol['chapters'][-1]['chapter']}"
+            vol_list.append({
+                'volume': vol_num,
+                'chapter_count': vol['chapter_count'],
+                'chapter_range': ch_range,
+            })
+        return jsonify(vol_list)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/mangadex/download', methods=['POST'])
+def mangadex_download():
+    """Start downloading manga volumes from MangaDex."""
+    data = request.json
+    manga_id = data.get('manga_id')
+    manga_title = data.get('manga_title', 'Manga')
+    volume_nums = data.get('volumes', [])
+    auto_convert = data.get('auto_convert', False)
+    devices = data.get('devices', ['xteink'])
+
+    if not manga_id or not volume_nums:
+        return jsonify({'error': 'Missing manga_id or volumes'}), 400
+
+    job_id = str(uuid.uuid4())[:8]
+    jobs[job_id] = {
+        'status': 'processing',
+        'messages': [],
+        'results': [],
+        'filename': manga_title,
+    }
+
+    thread = threading.Thread(
+        target=run_mangadex_download,
+        args=(job_id, manga_id, manga_title, volume_nums, auto_convert, devices)
+    )
+    thread.daemon = True
+    thread.start()
+
+    return jsonify({'job_id': job_id})
+
+
+# --- Preview routes ---
+
+@app.route('/preview/list')
+def preview_list():
+    """List EPUB files available for preview."""
+    epubs = []
+    for folder in ['XTe Ink', 'Kindle']:
+        folder_path = OUTPUT_DIR / folder
+        if folder_path.exists():
+            for f in sorted(folder_path.iterdir(), key=lambda x: x.name.lower()):
+                if f.suffix.lower() == '.epub':
+                    size_mb = f.stat().st_size / (1024 * 1024)
+                    epubs.append({
+                        'name': f.name,
+                        'folder': folder,
+                        'size': f"{size_mb:.1f} MB",
+                        'path': f"{folder}/{f.name}",
+                    })
+    return jsonify(epubs)
+
+
+@app.route('/preview/pages/<path:epub_path>')
+def preview_pages(epub_path):
+    """Extract and serve page list from an EPUB."""
+    import zipfile
+    full_path = OUTPUT_DIR / epub_path
+    if not full_path.exists():
+        return jsonify({'error': 'EPUB not found'}), 404
+
+    pages = []
+    with zipfile.ZipFile(full_path, 'r') as zf:
+        image_files = sorted([
+            n for n in zf.namelist()
+            if n.lower().endswith(('.jpg', '.jpeg', '.png'))
+            and not n.startswith('__MACOSX')
+        ])
+        for i, name in enumerate(image_files):
+            pages.append({
+                'index': i,
+                'name': name,
+                'url': f'/preview/image/{epub_path}/{i}',
+            })
+    return jsonify(pages)
+
+
+@app.route('/preview/image/<path:epub_path>/<int:page_idx>')
+def preview_image(epub_path, page_idx):
+    """Serve a single page image from an EPUB."""
+    import zipfile
+    import io
+    full_path = OUTPUT_DIR / epub_path
+    if not full_path.exists():
+        return "EPUB not found", 404
+
+    with zipfile.ZipFile(full_path, 'r') as zf:
+        image_files = sorted([
+            n for n in zf.namelist()
+            if n.lower().endswith(('.jpg', '.jpeg', '.png'))
+            and not n.startswith('__MACOSX')
+        ])
+        if page_idx >= len(image_files):
+            return "Page not found", 404
+
+        img_data = zf.read(image_files[page_idx])
+        ext = image_files[page_idx].rsplit('.', 1)[-1].lower()
+        mime = 'image/jpeg' if ext in ('jpg', 'jpeg') else 'image/png'
+
+        from flask import Response
+        return Response(img_data, mimetype=mime)
+
+
 if __name__ == '__main__':
     import os
-    port = int(os.environ.get('PORT', 5000))
+    port = int(os.environ.get('PORT', 8080))
+    host = os.environ.get('HOST', '127.0.0.1')
     print(f"\n  Comic Book Converter")
     print(f"  Open http://localhost:{port} in your browser\n")
     print(f"  Input:  {INPUT_DIR}/")
     print(f"  Output: {OUTPUT_DIR}/\n")
-    app.run(host='127.0.0.1', port=port, debug=False)
+    app.run(host=host, port=port, debug=False)
