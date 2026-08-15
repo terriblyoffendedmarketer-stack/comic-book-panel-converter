@@ -219,7 +219,7 @@ def build_epub(panels_dir, title=None, output_path=None, cover_image_path=None, 
         spine.append(chapter)
         panel_viewports[f"{page_id}.xhtml"] = (img_w, img_h)
 
-        page_match = re.match(r'page_(\d+)_panel_(\d+)', panel_file.stem)
+        page_match = re.match(r'page_(\d+)_(?:panel|view)_(\d+)', panel_file.stem)
         if page_match and page_match.group(2) == "00":
             page_num = int(page_match.group(1)) + 1
             toc.append(epub.Link(f"{page_id}.xhtml", f"Page {page_num}", page_id))

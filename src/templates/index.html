@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Comic Book Converter</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    background: #f5f5f5; color: #222; padding: 24px;
+    max-width: 640px; margin: 0 auto;
+  }
+  h1 { font-size: 22px; margin-bottom: 20px; }
+  h2 { font-size: 15px; color: #555; margin: 18px 0 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+  .drop-zone {
+    border: 2px dashed #bbb; border-radius: 10px; padding: 32px;
+    text-align: center; cursor: pointer; transition: all 0.2s;
+    background: #fff; margin-bottom: 16px;
+  }
+  .drop-zone:hover, .drop-zone.dragover { border-color: #4a90d9; background: #f0f6ff; }
+  .drop-zone p { color: #888; font-size: 15px; }
+  .drop-zone .browse { color: #4a90d9; text-decoration: underline; cursor: pointer; }
+  input[type="file"] { display: none; }
+
+  .file-list { list-style: none; margin-bottom: 16px; }
+  .file-list li {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 12px; background: #fff; border: 1px solid #e0e0e0;
+    border-radius: 6px; margin-bottom: 4px; font-size: 14px;
+  }
+  .file-list li .size { color: #999; font-size: 12px; }
+  .file-list li .remove { color: #c00; cursor: pointer; font-size: 12px; margin-left: 8px; }
+  .file-list li.selected { border-color: #4a90d9; background: #f0f6ff; }
+  .file-list li label { display: flex; align-items: center; gap: 8px; cursor: pointer; flex: 1; }
+
+  .device-options { margin-bottom: 16px; }
+  .device-options label {
+    display: inline-flex; align-items: center; gap: 6px;
+    margin-right: 16px; font-size: 14px; cursor: pointer;
+  }
+  .device-options input[type="checkbox"] { width: 16px; height: 16px; }
+
+  button.convert {
+    background: #4a90d9; color: #fff; border: none; border-radius: 8px;
+    padding: 12px 32px; font-size: 16px; cursor: pointer; width: 100%;
+    transition: background 0.2s;
+  }
+  button.convert:hover { background: #3a7bc8; }
+  button.convert:disabled { background: #ccc; cursor: not-allowed; }
+
+  .progress {
+    margin-top: 16px; padding: 12px; background: #fff;
+    border: 1px solid #e0e0e0; border-radius: 8px; display: none;
+  }
+  .progress .spinner {
+    display: inline-block; width: 14px; height: 14px;
+    border: 2px solid #ddd; border-top-color: #4a90d9;
+    border-radius: 50%; animation: spin 0.8s linear infinite;
+    margin-right: 8px; vertical-align: middle;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .progress .log { font-size: 13px; color: #555; margin-top: 8px; max-height: 120px; overflow-y: auto; }
+  .progress .log div { padding: 2px 0; }
+
+  .results {
+    margin-top: 16px; display: none;
+  }
+  .results a {
+    display: block; padding: 12px 16px; background: #e8f5e9;
+    border: 1px solid #a5d6a7; border-radius: 8px; margin-bottom: 6px;
+    text-decoration: none; color: #2e7d32; font-size: 14px;
+    transition: background 0.2s;
+  }
+  .results a:hover { background: #c8e6c9; }
+  .results .open-folder {
+    background: #fff; border-color: #ddd; color: #555;
+    text-align: center; font-size: 13px;
+  }
+
+  .error { color: #c00; margin-top: 8px; font-size: 14px; }
+
+  .existing-files { margin-bottom: 16px; }
+  .existing-files .empty { color: #999; font-size: 13px; font-style: italic; }
+  .file-list-scroll { max-height: 300px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 8px; }
+  .file-list-scroll .file-list { margin-bottom: 0; }
+  .file-list-scroll .file-list li:last-child { margin-bottom: 0; }
+  .select-bar {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 6px; font-size: 13px; color: #777;
+  }
+  .select-bar a { color: #4a90d9; cursor: pointer; text-decoration: none; }
+  .select-bar a:hover { text-decoration: underline; }
+
+  @media (prefers-color-scheme: dark) {
+    body { background: #1a1a1a; color: #e0e0e0; }
+    .drop-zone { background: #252525; border-color: #555; }
+    .drop-zone:hover, .drop-zone.dragover { border-color: #5a9fe0; background: #2a3545; }
+    .drop-zone p { color: #999; }
+    .file-list li { background: #252525; border-color: #444; }
+    .file-list li.selected { border-color: #5a9fe0; background: #2a3545; }
+    .file-list-scroll { border-color: #444; }
+    .select-bar { color: #888; }
+    .select-bar a { color: #5a9fe0; }
+    .progress { background: #252525; border-color: #444; }
+    .results a { background: #1b3a1b; border-color: #3a6b3a; color: #8bc88b; }
+    .results a:hover { background: #254025; }
+    .results .open-folder { background: #252525; border-color: #444; color: #aaa; }
+    button.convert { background: #5a9fe0; }
+    button.convert:hover { background: #4a8fd0; }
+    h2 { color: #999; }
+  }
+</style>
+</head>
+<body>
+
+<h1>Comic Book Converter</h1>
+
+<div class="drop-zone" id="dropZone">
+  <p>Drop comic files here or <span class="browse">browse</span></p>
+  <p style="font-size:12px; color:#aaa; margin-top:6px">.cbz, .cbr, .cb7</p>
+  <input type="file" id="fileInput" accept=".cbz,.cbr,.cb7" multiple>
+</div>
+
+<h2>Output format</h2>
+<div class="device-options">
+  <label><input type="checkbox" id="devXteink" checked> XTe Ink X4</label>
+  <label><input type="checkbox" id="devKindle"> Kindle Paperwhite</label>
+</div>
+
+<div class="existing-files">
+  <div class="select-bar">
+    <span id="fileCount">Files in input/</span>
+    <span><a id="selectAll">Select all</a> · <a id="selectNone">Clear</a></span>
+  </div>
+  <div class="file-list-scroll">
+    <ul class="file-list" id="existingFiles">
+      <li class="empty">Loading...</li>
+    </ul>
+  </div>
+</div>
+
+<button class="convert" id="convertBtn" disabled>Convert</button>
+
+<div class="progress" id="progressBox">
+  <span class="spinner"></span>
+  <span id="progressText">Starting...</span>
+  <div class="log" id="progressLog"></div>
+</div>
+
+<div class="results" id="resultsBox"></div>
+<div class="error" id="errorBox"></div>
+
+<script>
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+const existingFiles = document.getElementById('existingFiles');
+const convertBtn = document.getElementById('convertBtn');
+const progressBox = document.getElementById('progressBox');
+const progressText = document.getElementById('progressText');
+const progressLog = document.getElementById('progressLog');
+const resultsBox = document.getElementById('resultsBox');
+const errorBox = document.getElementById('errorBox');
+
+let selectedFiles = new Set();
+
+// Drop zone
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('dragover');
+  uploadFiles(e.dataTransfer.files);
+});
+fileInput.addEventListener('change', () => uploadFiles(fileInput.files));
+
+async function uploadFiles(files) {
+  const form = new FormData();
+  for (const f of files) form.append('files', f);
+  try {
+    const res = await fetch('/upload', { method: 'POST', body: form });
+    const data = await res.json();
+    if (data.length > 0) {
+      data.forEach(f => selectedFiles.add(f.name));
+      loadExistingFiles();
+    }
+  } catch (e) {
+    errorBox.textContent = 'Upload failed: ' + e.message;
+  }
+}
+
+async function loadExistingFiles() {
+  try {
+    const res = await fetch('/files');
+    const files = await res.json();
+    existingFiles.innerHTML = '';
+    if (files.length === 0) {
+      existingFiles.innerHTML = '<li class="empty">No comic files in input/ folder</li>';
+      updateConvertBtn();
+      return;
+    }
+    files.forEach(f => {
+      const li = document.createElement('li');
+      const checked = selectedFiles.has(f.name);
+      if (checked) li.classList.add('selected');
+      li.innerHTML = `<label><input type="checkbox" value="${f.name}" ${checked ? 'checked' : ''}> ${f.name} <span class="size">${f.size}</span></label>`;
+      li.querySelector('input').addEventListener('change', e => {
+        if (e.target.checked) { selectedFiles.add(f.name); li.classList.add('selected'); }
+        else { selectedFiles.delete(f.name); li.classList.remove('selected'); }
+        updateConvertBtn();
+      });
+      existingFiles.appendChild(li);
+    });
+    document.getElementById('fileCount').textContent = `${files.length} files in input/`;
+    updateConvertBtn();
+  } catch (e) {
+    existingFiles.innerHTML = '<li class="empty">Could not load files</li>';
+  }
+}
+
+function setAllFiles(checked) {
+  existingFiles.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+    cb.checked = checked;
+    const li = cb.closest('li');
+    if (checked) { selectedFiles.add(cb.value); li.classList.add('selected'); }
+    else { selectedFiles.delete(cb.value); li.classList.remove('selected'); }
+  });
+  updateConvertBtn();
+}
+
+function updateConvertBtn() {
+  const hasDevices = document.getElementById('devXteink').checked || document.getElementById('devKindle').checked;
+  convertBtn.disabled = selectedFiles.size === 0 || !hasDevices;
+  convertBtn.textContent = selectedFiles.size > 0
+    ? `Convert ${selectedFiles.size} file${selectedFiles.size > 1 ? 's' : ''}`
+    : 'Convert';
+}
+
+document.getElementById('devXteink').addEventListener('change', updateConvertBtn);
+document.getElementById('devKindle').addEventListener('change', updateConvertBtn);
+document.getElementById('selectAll').addEventListener('click', () => setAllFiles(true));
+document.getElementById('selectNone').addEventListener('click', () => setAllFiles(false));
+
+// Convert
+convertBtn.addEventListener('click', async () => {
+  const devices = [];
+  if (document.getElementById('devXteink').checked) devices.push('xteink');
+  if (document.getElementById('devKindle').checked) devices.push('kindle');
+
+  convertBtn.disabled = true;
+  progressBox.style.display = 'block';
+  resultsBox.style.display = 'none';
+  resultsBox.innerHTML = '';
+  errorBox.textContent = '';
+  progressLog.innerHTML = '';
+
+  const filesToConvert = [...selectedFiles];
+  let allResults = [];
+
+  for (let i = 0; i < filesToConvert.length; i++) {
+    const filename = filesToConvert[i];
+    progressText.textContent = `Converting ${filename} (${i + 1}/${filesToConvert.length})...`;
+
+    try {
+      const res = await fetch('/convert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename, devices })
+      });
+      const { job_id, error } = await res.json();
+      if (error) { addLog(error); continue; }
+
+      // Poll status
+      let done = false;
+      let lastMsgCount = 0;
+      while (!done) {
+        await new Promise(r => setTimeout(r, 1000));
+        const statusRes = await fetch(`/status/${job_id}`);
+        const job = await statusRes.json();
+
+        // Show new messages
+        if (job.messages) {
+          for (let m = lastMsgCount; m < job.messages.length; m++) {
+            addLog(job.messages[m]);
+          }
+          lastMsgCount = job.messages.length;
+          if (job.messages.length > 0) {
+            progressText.textContent = job.messages[job.messages.length - 1];
+          }
+        }
+
+        if (job.status === 'done') {
+          allResults = allResults.concat(job.results || []);
+          done = true;
+        } else if (job.status === 'error') {
+          addLog('Error: ' + (job.error || 'Unknown'));
+          done = true;
+        }
+      }
+    } catch (e) {
+      addLog('Error: ' + e.message);
+    }
+  }
+
+  // Show results
+  progressBox.style.display = 'none';
+  if (allResults.length > 0) {
+    resultsBox.style.display = 'block';
+    allResults.forEach(r => {
+      const a = document.createElement('a');
+      a.href = `/output/${r.folder}/${r.filename}`;
+      a.textContent = `Download: ${r.filename} (${r.device})`;
+      a.download = r.filename;
+      resultsBox.appendChild(a);
+    });
+    const openBtn = document.createElement('a');
+    openBtn.href = '#';
+    openBtn.className = 'open-folder';
+    openBtn.textContent = 'Open output folder in Finder';
+    openBtn.addEventListener('click', e => { e.preventDefault(); fetch('/open-output'); });
+    resultsBox.appendChild(openBtn);
+  }
+
+  convertBtn.disabled = false;
+});
+
+function addLog(msg) {
+  const div = document.createElement('div');
+  div.textContent = msg;
+  progressLog.appendChild(div);
+  progressLog.scrollTop = progressLog.scrollHeight;
+}
+
+// Init
+loadExistingFiles();
+</script>
+
+</body>
+</html>
