@@ -109,8 +109,11 @@ def convert_xteink_thirds(comic_path, manga, title, progress):
             cover_path = vp
             continue
 
-        panels = detect_panels(page_path, manga=manga)
-        regions = split_page(img, panels)
+        if manga or total_pages > 100:
+            regions = split_page(img, [])
+        else:
+            panels = detect_panels(page_path, manga=manga)
+            regions = split_page(img, panels)
 
         for ri, (rx, ry, rw, rh) in enumerate(regions):
             crop = img.crop((rx, ry, rx + rw, ry + rh))
