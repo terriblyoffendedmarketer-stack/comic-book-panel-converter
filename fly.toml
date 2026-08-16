@@ -1,0 +1,37 @@
+# fly.toml app configuration file generated for comic-converter on 2026-08-15T22:05:38+05:30
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'comic-converter'
+primary_region = 'sjc'
+
+[build]
+[env]
+  DATA_DIR = '/data'
+  PORT = '8080'
+
+[[mounts]]
+  source = 'data'
+  destination = '/data'
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+
+[checks]
+  [checks.health]
+    port = 8080
+    type = 'http'
+    interval = '30s'
+    timeout = '5s'
+    path = '/health'
+
+[[vm]]
+  memory = '1gb'
+  cpu_kind = 'shared'
+  cpus = 1
+  memory_mb = 1024

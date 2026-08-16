@@ -3,7 +3,7 @@ py7zr
 Pillow
 opencv-python-headless
 ebooklib
-kindlecomicconverter
+kindlecomicconverter @ git+https://github.com/ciromattia/kcc.git
 flask
 requests
 mangadex-downloader

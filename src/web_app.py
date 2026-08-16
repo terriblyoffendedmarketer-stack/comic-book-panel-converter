@@ -402,8 +402,9 @@ def mangadex_search():
     q = request.args.get('q', '').strip()
     if not q:
         return jsonify([])
+    unfiltered = request.args.get('unfiltered') == '1'
     try:
-        results = search_manga(q)
+        results = search_manga(q, unfiltered=unfiltered)
         return jsonify(results)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -412,8 +413,9 @@ def mangadex_search():
 @app.route('/mangadex/volumes/<manga_id>')
 def mangadex_volumes(manga_id):
     """Get available volumes for a manga."""
+    unfiltered = request.args.get('unfiltered') == '1'
     try:
-        volumes = get_volumes(manga_id)
+        volumes = get_volumes(manga_id, unfiltered=unfiltered)
         vol_list = []
         for vol_num in sorted(volumes.keys(), key=lambda x: (x == 'Extras', float(x) if x != 'Extras' and x.replace('.', '').isdigit() else 999)):
             vol = volumes[vol_num]

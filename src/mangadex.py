@@ -20,15 +20,20 @@ API = "https://api.mangadex.org"
 COVERS = "https://uploads.mangadex.org/covers"
 
 
-def search_manga(query, limit=12):
-    """Search MangaDex for manga by title. Returns list of results with cover URLs."""
+def search_manga(query, limit=20, unfiltered=False):
+    """Search MangaDex for manga by title. Returns list of results with cover URLs.
+    Filters out doujinshi and sorts official manga first.
+    When unfiltered=True, includes pornographic content rating."""
+    ratings = ["safe", "suggestive", "erotica"]
+    if unfiltered:
+        ratings.append("pornographic")
     r = requests.get(f"{API}/manga", params={
         "title": query,
         "limit": limit,
         "includes[]": "cover_art",
         "availableTranslatedLanguage[]": "en",
         "order[relevance]": "desc",
-        "contentRating[]": ["safe", "suggestive", "erotica"],
+        "contentRating[]": ratings,
     }, timeout=10)
     r.raise_for_status()
     data = r.json()
@@ -38,6 +43,9 @@ def search_manga(query, limit=12):
         attrs = manga["attributes"]
         title = attrs["title"]
         display_title = title.get("en") or title.get("ja-ro") or title.get("ja") or next(iter(title.values()), "Unknown")
+
+        tags = {t["attributes"]["name"].get("en", "") for t in attrs.get("tags", [])}
+        is_doujinshi = "Doujinshi" in tags
 
         cover_file = None
         for rel in manga.get("relationships", []):
@@ -54,15 +62,21 @@ def search_manga(query, limit=12):
             "year": attrs.get("year"),
             "cover_url": cover_url,
             "description": (attrs.get("description", {}).get("en") or "")[:200],
+            "doujinshi": is_doujinshi,
         })
 
+    # Sort: official manga first, then doujinshi
+    results.sort(key=lambda x: (x["doujinshi"], x["title"]))
     return results
 
 
-def get_volumes(manga_id):
+def get_volumes(manga_id, unfiltered=False):
     """Get available volumes for a manga (english translations only).
     Returns dict of volume_number -> {chapters: [...], chapter_count: N}
     """
+    ratings = ["safe", "suggestive", "erotica"]
+    if unfiltered:
+        ratings.append("pornographic")
     chapters_by_num = {}
     offset = 0
     limit = 500
@@ -75,7 +89,7 @@ def get_volumes(manga_id):
             "limit": limit,
             "offset": offset,
             "includes[]": "scanlation_group",
-            "contentRating[]": ["safe", "suggestive", "erotica"],
+            "contentRating[]": ratings,
         }, timeout=15)
         r.raise_for_status()
         data = r.json()
@@ -86,6 +100,9 @@ def get_volumes(manga_id):
             if ch_num is None:
                 continue
             if ch_num in chapters_by_num:
+                continue
+            # Skip external-only chapters (e.g. hosted on viz.com) — no downloadable pages
+            if attrs.get("externalUrl") and attrs.get("pages", 0) == 0:
                 continue
             chapters_by_num[ch_num] = {
                 "id": ch["id"],

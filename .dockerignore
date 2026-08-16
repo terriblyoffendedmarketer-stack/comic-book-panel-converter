@@ -3,6 +3,7 @@ __pycache__/
 *.pyc
 input/
 output/
+**/output/
 logs/
 .git/
 .claude/

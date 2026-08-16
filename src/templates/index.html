@@ -215,11 +215,62 @@
     font-size: 13px; color: var(--accent); transition: all 0.15s;
   }
   .preview-upload label:hover { border-color: var(--accent); }
+
+  /* Header */
+  .header { display: flex; align-items: center; justify-content: space-between; }
+  .settings-gear {
+    background: none; border: none; cursor: pointer; padding: 4px;
+    color: var(--muted); font-size: 18px; line-height: 1; transition: color 0.15s;
+  }
+  .settings-gear:hover { color: var(--text); }
+
+  /* Settings overlay */
+  .settings-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4);
+    z-index: 100; align-items: center; justify-content: center;
+  }
+  .settings-overlay.open { display: flex; }
+  .settings-panel {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 20px; max-width: 380px; width: 90%;
+  }
+  .settings-panel h3 { font-size: 15px; margin-bottom: 14px; }
+  .settings-panel .setting-group {
+    padding: 12px 0; border-top: 1px solid var(--border);
+  }
+  .settings-panel .setting-group:first-of-type { border-top: none; padding-top: 0; }
+  .settings-panel label.setting {
+    display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer;
+  }
+  .settings-panel .setting-desc {
+    font-size: 11px; color: var(--muted); margin-top: 4px; padding-left: 23px;
+  }
+  .settings-close {
+    display: block; margin: 14px auto 0; padding: 7px 24px; background: var(--accent);
+    color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;
+  }
 </style>
 </head>
 <body>
 
-<h1>Comic Book Converter</h1>
+<div class="header">
+  <h1>Comic Book Converter</h1>
+  <button class="settings-gear" id="settingsBtn" title="Settings">&#9881;</button>
+</div>
+
+<div class="settings-overlay" id="settingsOverlay">
+  <div class="settings-panel">
+    <h3>Settings</h3>
+    <div class="setting-group">
+      <label class="setting">
+        <input type="checkbox" id="settingUnfiltered">
+        Show all content (including fan works &amp; adult)
+      </label>
+      <div class="setting-desc">When enabled, search results include doujinshi and adult content from MangaDex. Off by default.</div>
+    </div>
+    <button class="settings-close" id="settingsClose">Done</button>
+  </div>
+</div>
 
 <div class="tabs">
   <button class="tab active" data-tab="convert">Convert</button>
@@ -343,6 +394,23 @@
 
 <script>
 const CLOUD = {{ 'true' if cloud else 'false' }};
+
+// --- Settings ---
+const settingsBtn = document.getElementById('settingsBtn');
+const settingsOverlay = document.getElementById('settingsOverlay');
+const settingsClose = document.getElementById('settingsClose');
+const settingUnfiltered = document.getElementById('settingUnfiltered');
+
+settingUnfiltered.checked = localStorage.getItem('showUnfiltered') === 'true';
+
+settingsBtn.addEventListener('click', () => settingsOverlay.classList.add('open'));
+settingsClose.addEventListener('click', () => settingsOverlay.classList.remove('open'));
+settingsOverlay.addEventListener('click', e => { if (e.target === settingsOverlay) settingsOverlay.classList.remove('open'); });
+settingUnfiltered.addEventListener('change', () => {
+  localStorage.setItem('showUnfiltered', settingUnfiltered.checked);
+});
+
+function isUnfiltered() { return settingUnfiltered.checked; }
 
 // --- Tab switching ---
 document.querySelectorAll('.tab').forEach(tab => {
@@ -502,7 +570,8 @@ async function searchMangaDex() {
   document.getElementById('mdError').textContent = '';
 
   try {
-    const res = await fetch(`/mangadex/search?q=${encodeURIComponent(q)}`);
+    const uf = isUnfiltered() ? '&unfiltered=1' : '';
+    const res = await fetch(`/mangadex/search?q=${encodeURIComponent(q)}${uf}`);
     const results = await res.json();
     if (results.error) { document.getElementById('mdError').textContent = results.error; container.innerHTML = ''; return; }
 
@@ -512,18 +581,47 @@ async function searchMangaDex() {
       return;
     }
 
-    results.forEach(m => {
+    // Filter out doujinshi unless unfiltered mode is on
+    const unfiltered = isUnfiltered();
+    const official = results.filter(m => !m.doujinshi);
+    const doujinshi = results.filter(m => m.doujinshi);
+    const displayResults = unfiltered ? results : (official.length > 0 ? official : results);
+
+    displayResults.forEach(m => {
       const card = document.createElement('div');
       card.className = 'manga-card';
       card.innerHTML = `
         ${m.cover_url ? `<img src="${m.cover_url}" alt="" loading="lazy" onerror="this.style.display='none'">` : ''}
         <div class="info">
           <div class="title">${escapeHtml(m.title)}</div>
-          <div class="meta">${m.status}${m.year ? ' · ' + m.year : ''}</div>
+          <div class="meta">${m.status}${m.year ? ' · ' + m.year : ''}${m.doujinshi ? ' · fan' : ''}</div>
         </div>`;
       card.addEventListener('click', () => selectManga(m, card));
       container.appendChild(card);
     });
+
+    if (doujinshi.length > 0 && official.length > 0 && !unfiltered) {
+      const showMore = document.createElement('div');
+      showMore.style.cssText = 'grid-column:1/-1; text-align:center; padding:8px;';
+      showMore.innerHTML = `<a style="color:var(--accent); cursor:pointer; font-size:13px">${doujinshi.length} fan work${doujinshi.length > 1 ? 's' : ''} hidden — show</a>`;
+      showMore.querySelector('a').addEventListener('click', () => {
+        showMore.remove();
+        doujinshi.forEach(m => {
+          const card = document.createElement('div');
+          card.className = 'manga-card';
+          card.style.opacity = '0.7';
+          card.innerHTML = `
+            ${m.cover_url ? `<img src="${m.cover_url}" alt="" loading="lazy" onerror="this.style.display='none'">` : ''}
+            <div class="info">
+              <div class="title">${escapeHtml(m.title)}</div>
+              <div class="meta">${m.status}${m.year ? ' · ' + m.year : ''} · fan</div>
+            </div>`;
+          card.addEventListener('click', () => selectManga(m, card));
+          container.appendChild(card);
+        });
+      });
+      container.appendChild(showMore);
+    }
   } catch (e) {
     document.getElementById('mdError').textContent = 'Search failed: ' + e.message;
     container.innerHTML = '';
@@ -545,7 +643,8 @@ async function selectManga(manga, card) {
   volList.innerHTML = '<div style="color:var(--muted); padding:10px">Loading volumes...</div>';
 
   try {
-    const res = await fetch(`/mangadex/volumes/${manga.id}`);
+    const vuf = isUnfiltered() ? '?unfiltered=1' : '';
+    const res = await fetch(`/mangadex/volumes/${manga.id}${vuf}`);
     const volumes = await res.json();
     if (volumes.error) { volList.innerHTML = `<div style="color:var(--danger)">${volumes.error}</div>`; return; }
 
@@ -553,9 +652,12 @@ async function selectManga(manga, card) {
     document.getElementById('mdVolCount').textContent = `${volumes.length} volumes`;
 
     if (volumes.length === 0) {
-      volList.innerHTML = '<div style="color:var(--muted); padding:10px">No english volumes available</div>';
+      volList.innerHTML = '<div style="color:var(--muted); padding:10px">No downloadable english chapters (some manga are only available on external sites like Viz)</div>';
       return;
     }
+
+    const totalCh = volumes.reduce((s, v) => s + v.chapter_count, 0);
+    document.getElementById('mdVolCount').textContent = `${volumes.length} volumes · ${totalCh} chapters`;
 
     volumes.forEach(v => {
       const label = document.createElement('label');
