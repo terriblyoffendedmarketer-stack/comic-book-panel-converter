@@ -45,14 +45,24 @@ Snaps split boundaries to panel gutters — never cuts through artwork:
 4. **`determine_splits()`** — Full-bleed → 1 view. 2 rows → 2 strips. 3+ rows → 3 strips.
 5. **`process_for_eink()`** — Grayscale, auto-contrast, sharpen, resize to 480x800, white-padded.
 
-## MangaDex Integration (mangadex.py)
+## Manga Sources
 
-Direct MangaDex API v5 integration (no CLI wrapper):
-- `search_manga()` — title search with cover art, filtered to english translations
-- `get_volumes()` — fetches all chapters, deduplicates by chapter number, groups by volume
-- `download_volume_as_cbz()` — downloads all pages, packs into CBZ in input/
-- Rate-limited (0.15s between page downloads) to respect MangaDex API limits
-- Auto-convert: downloaded CBZs can be immediately converted to EPUB
+Three download sources available via the Download tab:
+
+### MangaDex (mangadex.py)
+- Direct API v5 integration, best for fan translations
+- Limited English library — licensed manga gets DMCA'd
+- Rate-limited (0.15s between page downloads)
+
+### MangaPill (mangapill.py)
+- HTML scraping, no Cloudflare protection
+- Largest English manga library (Punpun, Baccano, etc.)
+- Images on cdn.readdetectiveconan.com
+
+### 1manga (onemanga.py)
+- HTML scraping with sequential CDN image URLs
+- Has volume info in chapter listings
+- Images on imgx.mghcdn.com (needs Referer header)
 
 ## Research Notes
 
@@ -85,6 +95,8 @@ Direct MangaDex API v5 integration (no CLI wrapper):
 - `CLAUDE.md` — this file
 - `src/web_app.py` — Flask web app: convert, MangaDex download, EPUB preview (the primary interface)
 - `src/mangadex.py` — MangaDex API wrapper (search, volumes, download as CBZ)
+- `src/mangapill.py` — MangaPill scraper (largest English library)
+- `src/onemanga.py` — 1manga.co scraper (sequential CDN images)
 - `src/split_page.py` — panel-aware overlapping thirds splitter + e-ink optimization
 - `src/convert.py` — CLI entry point, dual-path: `--device kindle|xteink`
 - `src/extract.py` — extracts pages from CBZ/CBR/CB7, parses ComicInfo.xml

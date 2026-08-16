@@ -125,6 +125,14 @@
   .select-bar a { color: var(--accent); cursor: pointer; text-decoration: none; }
   .select-bar a:hover { text-decoration: underline; }
 
+  /* Source selector */
+  .source-bar { margin-bottom: 8px; }
+  .source-bar select {
+    width: 100%; padding: 8px 10px; border-radius: 6px;
+    border: 1px solid var(--border); background: var(--card);
+    color: var(--text); font-size: 13px; cursor: pointer;
+  }
+
   /* MangaDex */
   .search-box {
     display: flex; gap: 8px; margin-bottom: 12px;
@@ -153,9 +161,8 @@
   .manga-card.selected { border-color: var(--accent); background: var(--selected-bg); }
   .manga-card img { width: 100%; height: 180px; object-fit: cover; display: block; pointer-events: none; user-select: none; }
   .manga-card .info { padding: 8px; pointer-events: none; }
-  .manga-card .title { font-size: 13px; font-weight: 500; line-height: 1.3; }
-  .manga-card .meta { font-size: 11px; color: var(--muted); margin-top: 3px; }
-  .manga-card * { pointer-events: none; }
+  .manga-card .title { font-size: 13px; font-weight: 500; line-height: 1.3; pointer-events: none; }
+  .manga-card .meta { font-size: 11px; color: var(--muted); margin-top: 3px; pointer-events: none; }
 
   .volume-list { margin-bottom: 12px; }
   .volume-list label {
@@ -278,7 +285,7 @@
 
 <div class="tabs">
   <button class="tab active" data-tab="convert">Convert</button>
-  <button class="tab" data-tab="mangadex">MangaDex</button>
+  <button class="tab" data-tab="mangadex">Download</button>
   <button class="tab" data-tab="preview">Preview</button>
 </div>
 
@@ -320,10 +327,17 @@
   <div class="error" id="convertError"></div>
 </div>
 
-<!-- MANGADEX TAB -->
+<!-- DOWNLOAD TAB -->
 <div class="tab-content" id="tab-mangadex">
+  <div class="source-bar">
+    <select id="mdSource">
+      <option value="mangadex">MangaDex</option>
+      <option value="mangapill">MangaPill</option>
+      <option value="1manga">1manga</option>
+    </select>
+  </div>
   <div class="search-box">
-    <input type="text" id="mdSearch" placeholder="Search MangaDex...">
+    <input type="text" id="mdSearch" placeholder="Search manga...">
     <button id="mdSearchBtn">Search</button>
   </div>
 
@@ -557,25 +571,35 @@ convertBtn.addEventListener('click', async () => {
   convertBtn.disabled = false;
 });
 
-// ===== MANGADEX TAB =====
+// ===== DOWNLOAD TAB =====
 let selectedManga = null;
 let selectedVolumes = new Set();
 
-document.getElementById('mdSearchBtn').addEventListener('click', searchMangaDex);
-document.getElementById('mdSearch').addEventListener('keydown', e => { if (e.key === 'Enter') searchMangaDex(); });
+function getSource() { return document.getElementById('mdSource').value; }
 
-async function searchMangaDex() {
+document.getElementById('mdSearchBtn').addEventListener('click', searchManga);
+document.getElementById('mdSearch').addEventListener('keydown', e => { if (e.key === 'Enter') searchManga(); });
+
+async function searchManga() {
   const q = document.getElementById('mdSearch').value.trim();
   if (!q) return;
 
+  const source = getSource();
   const container = document.getElementById('mdResults');
   container.innerHTML = '<div style="color:var(--muted); padding:20px; text-align:center; grid-column:1/-1">Searching...</div>';
   document.getElementById('mdVolumes').style.display = 'none';
   document.getElementById('mdError').textContent = '';
 
   try {
-    const uf = isUnfiltered() ? '&unfiltered=1' : '';
-    const res = await fetch(`/mangadex/search?q=${encodeURIComponent(q)}${uf}`);
+    let url;
+    if (source === 'mangadex') {
+      const uf = isUnfiltered() ? '&unfiltered=1' : '';
+      url = `/mangadex/search?q=${encodeURIComponent(q)}${uf}`;
+    } else {
+      url = `/source/search?q=${encodeURIComponent(q)}&source=${source}`;
+    }
+
+    const res = await fetch(url);
     const results = await res.json();
     if (results.error) { document.getElementById('mdError').textContent = results.error; container.innerHTML = ''; return; }
 
@@ -585,11 +609,10 @@ async function searchMangaDex() {
       return;
     }
 
-    // Filter out doujinshi unless unfiltered mode is on
     const unfiltered = isUnfiltered();
     const official = results.filter(m => !m.doujinshi);
     const doujinshi = results.filter(m => m.doujinshi);
-    const displayResults = unfiltered ? results : (official.length > 0 ? official : results);
+    const displayResults = (source === 'mangadex' && !unfiltered && official.length > 0) ? official : results;
 
     displayResults.forEach(m => {
       const card = document.createElement('div');
@@ -598,13 +621,13 @@ async function searchMangaDex() {
         ${m.cover_url ? `<img src="${m.cover_url}" alt="" loading="lazy" onerror="this.style.display='none'">` : ''}
         <div class="info">
           <div class="title">${escapeHtml(m.title)}</div>
-          <div class="meta">${m.status}${m.year ? ' · ' + m.year : ''}${m.doujinshi ? ' · fan' : ''}</div>
+          <div class="meta">${m.status || ''}${m.year ? ' · ' + m.year : ''}${m.doujinshi ? ' · fan' : ''}</div>
         </div>`;
       card.addEventListener('click', () => selectManga(m, card));
       container.appendChild(card);
     });
 
-    if (doujinshi.length > 0 && official.length > 0 && !unfiltered) {
+    if (source === 'mangadex' && doujinshi.length > 0 && official.length > 0 && !unfiltered) {
       const showMore = document.createElement('div');
       showMore.style.cssText = 'grid-column:1/-1; text-align:center; padding:8px;';
       showMore.innerHTML = `<a style="color:var(--accent); cursor:pointer; font-size:13px">${doujinshi.length} fan work${doujinshi.length > 1 ? 's' : ''} hidden — show</a>`;
@@ -634,6 +657,7 @@ async function searchMangaDex() {
 
 async function selectManga(manga, card) {
   selectedManga = manga;
+  selectedManga._source = getSource();
   selectedVolumes.clear();
 
   document.querySelectorAll('.manga-card').forEach(c => c.classList.remove('selected'));
@@ -641,14 +665,22 @@ async function selectManga(manga, card) {
 
   const volSection = document.getElementById('mdVolumes');
   volSection.style.display = 'block';
-  document.getElementById('mdSelectedTitle').textContent = manga.title + ' — Volumes';
+  document.getElementById('mdSelectedTitle').textContent = manga.title + ' — Chapters';
 
   const volList = document.getElementById('mdVolumeList');
-  volList.innerHTML = '<div style="color:var(--muted); padding:10px">Loading volumes...</div>';
+  volList.innerHTML = '<div style="color:var(--muted); padding:10px">Loading chapters...</div>';
 
   try {
-    const vuf = isUnfiltered() ? '?unfiltered=1' : '';
-    const res = await fetch(`/mangadex/volumes/${manga.id}${vuf}`);
+    let url;
+    const source = manga._source;
+    if (source === 'mangadex') {
+      const vuf = isUnfiltered() ? '?unfiltered=1' : '';
+      url = `/mangadex/volumes/${manga.id}${vuf}`;
+    } else {
+      url = `/source/volumes?source=${source}&id=${encodeURIComponent(manga.id)}&slug=${encodeURIComponent(manga.slug || '')}`;
+    }
+
+    const res = await fetch(url);
     const volumes = await res.json();
     if (volumes.error) { volList.innerHTML = `<div style="color:var(--danger)">${volumes.error}</div>`; return; }
 
@@ -656,7 +688,7 @@ async function selectManga(manga, card) {
     document.getElementById('mdVolCount').textContent = `${volumes.length} volumes`;
 
     if (volumes.length === 0) {
-      volList.innerHTML = '<div style="color:var(--muted); padding:10px">No downloadable english chapters found. This manga may not have fan translations on MangaDex, or chapters may only be available on external sites like Viz.</div>';
+      volList.innerHTML = '<div style="color:var(--muted); padding:10px">No downloadable chapters found.</div>';
       return;
     }
 
@@ -677,7 +709,7 @@ async function selectManga(manga, card) {
       volList.appendChild(label);
     });
   } catch (e) {
-    volList.innerHTML = `<div style="color:var(--danger)">Failed to load volumes</div>`;
+    volList.innerHTML = `<div style="color:var(--danger)">Failed to load chapters</div>`;
   }
 }
 
@@ -726,16 +758,22 @@ document.getElementById('mdDownloadBtn').addEventListener('click', async () => {
   progressText.textContent = 'Starting download...';
 
   try {
-    const res = await fetch('/mangadex/download', {
+    const source = selectedManga._source || 'mangadex';
+    const endpoint = source === 'mangadex' ? '/mangadex/download' : '/source/download';
+    const payload = {
+      manga_id: selectedManga.id,
+      manga_title: selectedManga.title,
+      manga_slug: selectedManga.slug || '',
+      volumes: [...selectedVolumes],
+      auto_convert: autoConvert,
+      devices: devices,
+    };
+    if (source !== 'mangadex') payload.source = source;
+
+    const res = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        manga_id: selectedManga.id,
-        manga_title: selectedManga.title,
-        volumes: [...selectedVolumes],
-        auto_convert: autoConvert,
-        devices: devices,
-      })
+      body: JSON.stringify(payload)
     });
     const { job_id, error } = await res.json();
     if (error) { document.getElementById('mdError').textContent = error; progressBox.style.display = 'none'; btn.disabled = false; return; }

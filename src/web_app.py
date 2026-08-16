@@ -30,6 +30,8 @@ from detect_panels import detect_panels
 from split_page import split_page, process_for_eink, process_cover_for_eink
 from build_epub import build_epub
 from mangadex import search_manga, get_volumes, download_volume_as_cbz
+from mangapill import search_manga as mp_search, get_volumes as mp_volumes, download_volume_as_cbz as mp_download
+from onemanga import search_manga as om_search, get_volumes as om_volumes, download_volume_as_cbz as om_download
 from PIL import Image
 import re
 
@@ -461,6 +463,159 @@ def mangadex_download():
     thread.start()
 
     return jsonify({'job_id': job_id})
+
+
+# --- Multi-source routes ---
+
+@app.route('/source/search')
+def source_search():
+    """Search a manga source by name."""
+    q = request.args.get('q', '').strip()
+    source = request.args.get('source', 'mangapill')
+    if not q:
+        return jsonify([])
+    try:
+        if source == 'mangapill':
+            return jsonify(mp_search(q))
+        elif source == '1manga':
+            return jsonify(om_search(q))
+        else:
+            return jsonify({'error': f'Unknown source: {source}'}), 400
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/source/volumes')
+def source_volumes():
+    """Get volumes/chapters for a manga from a source."""
+    source = request.args.get('source', 'mangapill')
+    manga_id = request.args.get('id', '')
+    slug = request.args.get('slug', '')
+    if not manga_id and not slug:
+        return jsonify({'error': 'Missing id or slug'}), 400
+    try:
+        if source == 'mangapill':
+            volumes = mp_volumes(manga_id, slug)
+        elif source == '1manga':
+            volumes = om_volumes(slug or manga_id)
+        else:
+            return jsonify({'error': f'Unknown source: {source}'}), 400
+
+        vol_list = []
+        for vol_num in sorted(volumes.keys(), key=lambda x: (x == 'Extras', float(x) if x != 'Extras' and x.replace('.', '').isdigit() else 999)):
+            vol = volumes[vol_num]
+            ch_range = f"Ch. {vol['chapters'][0]['chapter']}"
+            if len(vol['chapters']) > 1:
+                ch_range += f"–{vol['chapters'][-1]['chapter']}"
+            vol_list.append({
+                'volume': vol_num,
+                'chapter_count': vol['chapter_count'],
+                'chapter_range': ch_range,
+            })
+        return jsonify(vol_list)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/source/download', methods=['POST'])
+def source_download():
+    """Download manga from a non-MangaDex source."""
+    data = request.json
+    source = data.get('source', 'mangapill')
+    manga_id = data.get('manga_id', '')
+    manga_slug = data.get('manga_slug', '')
+    manga_title = data.get('manga_title', 'Manga')
+    volume_nums = data.get('volumes', [])
+    auto_convert = data.get('auto_convert', False)
+    devices = data.get('devices', ['xteink'])
+
+    if not volume_nums:
+        return jsonify({'error': 'No volumes selected'}), 400
+
+    job_id = str(uuid.uuid4())[:8]
+    jobs[job_id] = {
+        'status': 'processing',
+        'messages': [],
+        'results': [],
+        'filename': manga_title,
+    }
+
+    thread = threading.Thread(
+        target=run_source_download,
+        args=(job_id, source, manga_id, manga_slug, manga_title, volume_nums, auto_convert, devices)
+    )
+    thread.daemon = True
+    thread.start()
+
+    return jsonify({'job_id': job_id})
+
+
+def run_source_download(job_id, source, manga_id, manga_slug, manga_title, volume_nums, auto_convert, devices):
+    job = jobs[job_id]
+
+    def progress(msg):
+        job['messages'].append(msg)
+
+    try:
+        progress(f"Fetching chapter data for {manga_title} from {source}...")
+        if source == 'mangapill':
+            all_volumes = mp_volumes(manga_id, manga_slug)
+        elif source == '1manga':
+            all_volumes = om_volumes(manga_slug or manga_id)
+        else:
+            progress(f"Unknown source: {source}")
+            job['status'] = 'done'
+            return
+
+        downloaded_files = []
+        for vol_num in volume_nums:
+            if vol_num not in all_volumes:
+                progress(f"Volume {vol_num} not found, skipping...")
+                continue
+
+            vol_data = all_volumes[vol_num]
+            if source == 'mangapill':
+                cbz_path = mp_download(manga_title, vol_data["chapters"], INPUT_DIR, progress)
+            elif source == '1manga':
+                cbz_path = om_download(manga_title, vol_num, vol_data["chapters"], INPUT_DIR, progress)
+            downloaded_files.append(cbz_path)
+
+        if auto_convert and downloaded_files and devices:
+            progress("Starting conversion...")
+            results = []
+            for cbz_path in downloaded_files:
+                title = cbz_path.stem
+                direction, reason = detect_reading_direction(cbz_path)
+                manga = (direction == 'rtl')
+                progress(f"Converting {title} ({'Manga' if manga else 'Western'})...")
+
+                if 'xteink' in devices:
+                    path = convert_xteink_thirds(cbz_path, manga, title, progress)
+                    if path:
+                        results.append({
+                            'device': 'XTe Ink X4',
+                            'filename': Path(path).name,
+                            'folder': 'XTe Ink',
+                            'path': path,
+                        })
+
+                if 'kindle' in devices:
+                    path = convert_kindle(cbz_path, manga, title, progress)
+                    if path:
+                        results.append({
+                            'device': 'Kindle Paperwhite',
+                            'filename': Path(path).name,
+                            'folder': 'Kindle',
+                            'path': path,
+                        })
+
+            job['results'] = results
+
+        progress("Done!")
+        job['status'] = 'done'
+    except Exception as e:
+        progress(f"Error: {e}")
+        job['status'] = 'done'
 
 
 # --- Preview routes ---

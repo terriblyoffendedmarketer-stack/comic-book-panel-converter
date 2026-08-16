@@ -6,5 +6,6 @@ ebooklib
 kindlecomicconverter @ git+https://github.com/ciromattia/kcc.git
 flask
 requests
+beautifulsoup4
 mangadex-downloader
 gunicorn
