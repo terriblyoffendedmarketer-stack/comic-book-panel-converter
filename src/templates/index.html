@@ -145,13 +145,17 @@
   .manga-card {
     background: var(--card); border: 1px solid var(--border); border-radius: 8px;
     overflow: hidden; cursor: pointer; transition: all 0.15s;
+    touch-action: manipulation; -webkit-tap-highlight-color: rgba(0,0,0,0.05);
+    user-select: none; min-height: 80px;
   }
   .manga-card:hover { border-color: var(--accent); transform: translateY(-1px); }
+  .manga-card:active { transform: scale(0.98); }
   .manga-card.selected { border-color: var(--accent); background: var(--selected-bg); }
-  .manga-card img { width: 100%; height: 180px; object-fit: cover; display: block; }
-  .manga-card .info { padding: 8px; }
+  .manga-card img { width: 100%; height: 180px; object-fit: cover; display: block; pointer-events: none; user-select: none; }
+  .manga-card .info { padding: 8px; pointer-events: none; }
   .manga-card .title { font-size: 13px; font-weight: 500; line-height: 1.3; }
   .manga-card .meta { font-size: 11px; color: var(--muted); margin-top: 3px; }
+  .manga-card * { pointer-events: none; }
 
   .volume-list { margin-bottom: 12px; }
   .volume-list label {
@@ -652,7 +656,7 @@ async function selectManga(manga, card) {
     document.getElementById('mdVolCount').textContent = `${volumes.length} volumes`;
 
     if (volumes.length === 0) {
-      volList.innerHTML = '<div style="color:var(--muted); padding:10px">No downloadable english chapters (some manga are only available on external sites like Viz)</div>';
+      volList.innerHTML = '<div style="color:var(--muted); padding:10px">No downloadable english chapters found. This manga may not have fan translations on MangaDex, or chapters may only be available on external sites like Viz.</div>';
       return;
     }
 
