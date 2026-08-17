@@ -33,4 +33,4 @@ RUN mkdir -p /data/input /data/output
 
 EXPOSE 8080
 
-CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--timeout", "600", "--workers", "2", "--threads", "4", "wsgi:app"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--timeout", "600", "--workers", "1", "--threads", "8", "wsgi:app"]
