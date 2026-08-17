@@ -527,15 +527,20 @@ def cleanup_file(filepath):
 
 @app.route('/cleanup-input/<path:filepath>', methods=['POST'])
 def cleanup_input_file(filepath):
-    """Delete a file from input after user has downloaded it."""
+    """Delete a file from input and its associated output files."""
     target = INPUT_DIR / filepath
-    if not target.exists():
-        return jsonify({'ok': True})
-    try:
-        target.unlink()
-        return jsonify({'ok': True})
-    except OSError as e:
-        return jsonify({'error': str(e)}), 500
+    if target.exists():
+        try:
+            target.unlink()
+        except OSError as e:
+            return jsonify({'error': str(e)}), 500
+    stem = Path(filepath).stem
+    for d in OUTPUT_DIR.iterdir() if OUTPUT_DIR.exists() else []:
+        if d.is_dir() and stem in d.name:
+            shutil.rmtree(d, ignore_errors=True)
+        elif d.is_file() and stem in d.name:
+            d.unlink(missing_ok=True)
+    return jsonify({'ok': True})
 
 
 @app.route('/disk-usage')
