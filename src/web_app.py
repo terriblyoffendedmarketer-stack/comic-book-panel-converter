@@ -18,6 +18,8 @@ import json
 import uuid
 import shutil
 import threading
+import subprocess
+import math
 from pathlib import Path
 
 from flask import Flask, render_template, request, jsonify, send_from_directory
@@ -34,6 +36,8 @@ from mangapill import search_manga as mp_search, get_volumes as mp_volumes, down
 from onemanga import search_manga as om_search, get_volumes as om_volumes, download_volume_as_cbz as om_download
 from PIL import Image
 import re
+import requests as http_requests
+import blob_store
 
 CLOUD = bool(os.environ.get('RAILWAY_ENVIRONMENT') or os.environ.get('FLY_APP_NAME'))
 
@@ -72,7 +76,42 @@ DEVICE_PROFILES = {
 }
 
 
-def convert_xteink_thirds(comic_path, manga, title, progress):
+NUM_WORKERS = max(1, min(6, os.cpu_count() - 2)) if os.cpu_count() else 4
+PANEL_WORKER = str(ROOT / 'src' / 'panel_worker.py')
+
+
+def detect_panels_parallel(pages, manga):
+    """Detect panels for all pages in parallel using subprocesses."""
+    if len(pages) <= 2:
+        return {str(p): detect_panels(p, manga=manga) for p in pages}
+
+    batch_size = math.ceil(len(pages) / NUM_WORKERS)
+    batches = [pages[i:i + batch_size] for i in range(0, len(pages), batch_size)]
+
+    procs = []
+    for batch in batches:
+        proc = subprocess.Popen(
+            [sys.executable, PANEL_WORKER],
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            cwd=str(ROOT),
+        )
+        payload = json.dumps({'pages': [str(p) for p in batch], 'manga': manga})
+        proc.stdin.write(payload.encode())
+        proc.stdin.close()
+        procs.append(proc)
+
+    all_panels = {}
+    for proc in procs:
+        stdout, _ = proc.communicate(timeout=300)
+        if proc.returncode == 0 and stdout:
+            result = json.loads(stdout)
+            for path, panels in result.items():
+                all_panels[path] = [tuple(p) for p in panels]
+
+    return all_panels
+
+
+def convert_xteink_thirds(comic_path, manga, title, progress, is_cancelled=None):
     """Convert for XTe Ink using panel-aware overlapping thirds + e-ink dithering."""
     device = DEVICE_PROFILES['xteink']
     out_dir = OUTPUT_DIR / device['folder']
@@ -97,7 +136,16 @@ def convert_xteink_thirds(comic_path, manga, title, progress):
     total_pages = len(pages)
     cover_path = None
 
+    progress(f"Detecting panels ({total_pages} pages, {NUM_WORKERS} workers)...")
+    pages_to_detect = pages[1:]
+    panel_cache = detect_panels_parallel(pages_to_detect, manga)
+
     for page_idx, page_path in enumerate(pages):
+        if is_cancelled and is_cancelled():
+            shutil.rmtree(pages_dir, ignore_errors=True)
+            shutil.rmtree(views_dir, ignore_errors=True)
+            return None
+
         progress(f"Processing page {page_idx + 1} of {total_pages}...")
         img = Image.open(page_path)
         w, h = img.size
@@ -109,11 +157,8 @@ def convert_xteink_thirds(comic_path, manga, title, progress):
             cover_path = vp
             continue
 
-        if manga or total_pages > 100:
-            regions = split_page(img, [])
-        else:
-            panels = detect_panels(page_path, manga=manga)
-            regions = split_page(img, panels)
+        panels = panel_cache.get(str(page_path), detect_panels(page_path, manga=manga))
+        regions = split_page(img, panels)
 
         for ri, (rx, ry, rw, rh) in enumerate(regions):
             crop = img.crop((rx, ry, rx + rw, ry + rh))
@@ -184,6 +229,9 @@ def run_conversion(job_id, filepath, devices):
     def progress(msg):
         job['messages'].append(msg)
 
+    def is_cancelled():
+        return job.get('cancelled', False)
+
     try:
         comic_path = Path(filepath)
         title = comic_path.stem
@@ -194,8 +242,13 @@ def run_conversion(job_id, filepath, devices):
 
         results = []
 
+        if is_cancelled():
+            return
+
         if 'xteink' in devices:
-            path = convert_xteink_thirds(comic_path, manga, title, progress)
+            path = convert_xteink_thirds(comic_path, manga, title, progress, is_cancelled)
+            if is_cancelled():
+                return
             if path:
                 results.append({
                     'device': 'XTe Ink X4',
@@ -203,6 +256,9 @@ def run_conversion(job_id, filepath, devices):
                     'folder': 'XTe Ink',
                     'path': path,
                 })
+
+        if is_cancelled():
+            return
 
         if 'kindle' in devices:
             path = convert_kindle(comic_path, manga, title, progress)
@@ -219,9 +275,10 @@ def run_conversion(job_id, filepath, devices):
         progress("Done!")
 
     except Exception as e:
-        job['status'] = 'error'
-        job['error'] = str(e)
-        progress(f"Error: {e}")
+        if not is_cancelled():
+            job['status'] = 'error'
+            job['error'] = str(e)
+            progress(f"Error: {e}")
 
 
 def run_mangadex_download(job_id, manga_id, manga_title, volume_nums, auto_convert, devices):
@@ -231,12 +288,18 @@ def run_mangadex_download(job_id, manga_id, manga_title, volume_nums, auto_conve
     def progress(msg):
         job['messages'].append(msg)
 
+    def is_cancelled():
+        return job.get('cancelled', False)
+
     try:
         progress(f"Fetching volume data for {manga_title}...")
         all_volumes = get_volumes(manga_id)
 
         downloaded_files = []
         for vol_num in volume_nums:
+            if is_cancelled():
+                return
+
             if vol_num not in all_volumes:
                 progress(f"Volume {vol_num} not found, skipping...")
                 continue
@@ -247,6 +310,7 @@ def run_mangadex_download(job_id, manga_id, manga_title, volume_nums, auto_conve
                 vol_data["chapters"], INPUT_DIR, progress
             )
             downloaded_files.append(cbz_path)
+            log_download(cbz_path.name)
 
         if auto_convert and downloaded_files and devices:
             progress("Starting conversion...")
@@ -277,9 +341,17 @@ def run_mangadex_download(job_id, manga_id, manga_title, volume_nums, auto_conve
                             'path': path,
                         })
 
+            if CLOUD:
+                for cbz_path in downloaded_files:
+                    try:
+                        cbz_path.unlink()
+                        progress(f"Cleaned up {cbz_path.name}")
+                    except OSError:
+                        pass
+
             job['results'] = results
         else:
-            job['results'] = [{'device': 'Downloaded', 'filename': p.name, 'folder': '', 'path': str(p)} for p in downloaded_files]
+            job['results'] = [{'device': 'Downloaded', 'filename': p.name, 'folder': '_input', 'path': str(p)} for p in downloaded_files]
 
         job['status'] = 'done'
         progress("Done!")
@@ -316,16 +388,38 @@ def manifest():
     })
 
 
+DOWNLOADS_LOG = DATA_DIR / '.downloaded'
+
+
+def log_download(filename):
+    """Track files downloaded by this tool."""
+    DOWNLOADS_LOG.parent.mkdir(parents=True, exist_ok=True)
+    with open(DOWNLOADS_LOG, 'a') as f:
+        f.write(filename + '\n')
+
+
+def get_downloaded_files():
+    """Get set of filenames downloaded by this tool."""
+    if not DOWNLOADS_LOG.exists():
+        return set()
+    return set(DOWNLOADS_LOG.read_text().strip().splitlines())
+
+
 @app.route('/files')
 def list_files():
     """List comic files in input/ folder."""
     extensions = {'.cbz', '.cbr', '.cb7'}
+    downloaded = get_downloaded_files()
     files = []
     if INPUT_DIR.exists():
         for f in sorted(INPUT_DIR.iterdir(), key=lambda x: x.name.lower()):
-            if f.suffix.lower() in extensions:
+            if f.suffix.lower() in extensions and f.stat().st_size > 0:
                 size_mb = f.stat().st_size / (1024 * 1024)
-                files.append({'name': f.name, 'size': f"{size_mb:.1f} MB"})
+                files.append({
+                    'name': f.name,
+                    'size': f"{size_mb:.1f} MB",
+                    'downloaded': f.name in downloaded,
+                })
     return jsonify(files)
 
 
@@ -383,20 +477,89 @@ def get_status(job_id):
     return jsonify(job)
 
 
+@app.route('/cancel/<job_id>', methods=['POST'])
+def cancel_job(job_id):
+    """Cancel a running job."""
+    job = jobs.get(job_id)
+    if not job:
+        return jsonify({'error': 'Job not found'}), 404
+    job['cancelled'] = True
+    job['status'] = 'done'
+    job['messages'].append('Cancelled by user.')
+    return jsonify({'ok': True})
+
+
 @app.route('/output/<path:filepath>')
 def download_file(filepath):
     """Serve converted files."""
     return send_from_directory(str(OUTPUT_DIR), filepath, as_attachment=True)
 
 
-@app.route('/open-output')
-def open_output():
-    """Open output folder in Finder (local only)."""
+@app.route('/input/<path:filepath>')
+def download_input_file(filepath):
+    """Serve files from input/ (for downloading CBZs to local machine)."""
+    return send_from_directory(str(INPUT_DIR), filepath, as_attachment=True)
+
+
+@app.route('/open-folder/<folder>')
+def open_folder(folder):
+    """Open input or output folder in Finder (local only)."""
     if CLOUD:
         return jsonify({'error': 'Not available in cloud mode'}), 400
     import subprocess
-    subprocess.Popen(['open', str(OUTPUT_DIR)])
+    target = INPUT_DIR if folder == 'input' else OUTPUT_DIR
+    subprocess.Popen(['open', str(target)])
     return jsonify({'ok': True})
+
+
+@app.route('/cleanup/<path:filepath>', methods=['POST'])
+def cleanup_file(filepath):
+    """Delete a file from output after user has downloaded it."""
+    target = OUTPUT_DIR / filepath
+    if not target.exists():
+        return jsonify({'ok': True})
+    try:
+        target.unlink()
+        return jsonify({'ok': True})
+    except OSError as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/cleanup-input/<path:filepath>', methods=['POST'])
+def cleanup_input_file(filepath):
+    """Delete a file from input after user has downloaded it."""
+    target = INPUT_DIR / filepath
+    if not target.exists():
+        return jsonify({'ok': True})
+    try:
+        target.unlink()
+        return jsonify({'ok': True})
+    except OSError as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/disk-usage')
+def disk_usage():
+    """Report disk usage for input and output directories."""
+    def dir_size(path):
+        total = 0
+        if path.exists():
+            for f in path.rglob('*'):
+                if f.is_file():
+                    total += f.stat().st_size
+        return total
+
+    input_size = dir_size(INPUT_DIR)
+    output_size = dir_size(OUTPUT_DIR)
+    total = shutil.disk_usage(str(DATA_DIR))
+
+    return jsonify({
+        'input_mb': round(input_size / (1024 * 1024), 1),
+        'output_mb': round(output_size / (1024 * 1024), 1),
+        'disk_total_mb': round(total.total / (1024 * 1024), 1),
+        'disk_used_mb': round(total.used / (1024 * 1024), 1),
+        'disk_free_mb': round(total.free / (1024 * 1024), 1),
+    })
 
 
 # --- MangaDex routes ---
@@ -421,6 +584,15 @@ def mangadex_volumes(manga_id):
     unfiltered = request.args.get('unfiltered') == '1'
     try:
         volumes = get_volumes(manga_id, unfiltered=unfiltered)
+
+        all_chapters = []
+        for vol in volumes.values():
+            all_chapters.extend(vol['chapters'])
+        all_chapters.sort(key=lambda c: float(c["chapter"]) if c["chapter"].replace(".", "").isdigit() else 999)
+        total_chapters = len(all_chapters)
+        first_ch = all_chapters[0]['chapter'] if all_chapters else '1'
+        last_ch = all_chapters[-1]['chapter'] if all_chapters else '1'
+
         vol_list = []
         for vol_num in sorted(volumes.keys(), key=lambda x: (x == 'Extras', float(x) if x != 'Extras' and x.replace('.', '').isdigit() else 999)):
             vol = volumes[vol_num]
@@ -432,7 +604,12 @@ def mangadex_volumes(manga_id):
                 'chapter_count': vol['chapter_count'],
                 'chapter_range': ch_range,
             })
-        return jsonify(vol_list)
+        return jsonify({
+            'volumes': vol_list,
+            'total_chapters': total_chapters,
+            'first_chapter': first_ch,
+            'last_chapter': last_ch,
+        })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -504,6 +681,14 @@ def source_volumes():
         else:
             return jsonify({'error': f'Unknown source: {source}'}), 400
 
+        all_chapters = []
+        for vol in volumes.values():
+            all_chapters.extend(vol['chapters'])
+        all_chapters.sort(key=lambda c: float(c["chapter"]) if c["chapter"].replace(".", "").isdigit() else 999)
+        total_chapters = len(all_chapters)
+        first_ch = all_chapters[0]['chapter'] if all_chapters else '1'
+        last_ch = all_chapters[-1]['chapter'] if all_chapters else '1'
+
         vol_list = []
         for vol_num in sorted(volumes.keys(), key=lambda x: (x == 'Extras', float(x) if x != 'Extras' and x.replace('.', '').isdigit() else 999)):
             vol = volumes[vol_num]
@@ -515,7 +700,12 @@ def source_volumes():
                 'chapter_count': vol['chapter_count'],
                 'chapter_range': ch_range,
             })
-        return jsonify(vol_list)
+        return jsonify({
+            'volumes': vol_list,
+            'total_chapters': total_chapters,
+            'first_chapter': first_ch,
+            'last_chapter': last_ch,
+        })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -559,6 +749,9 @@ def run_source_download(job_id, source, manga_id, manga_slug, manga_title, volum
     def progress(msg):
         job['messages'].append(msg)
 
+    def is_cancelled():
+        return job.get('cancelled', False)
+
     try:
         progress(f"Fetching chapter data for {manga_title} from {source}...")
         if source == 'mangapill':
@@ -570,18 +763,39 @@ def run_source_download(job_id, source, manga_id, manga_slug, manga_title, volum
             job['status'] = 'done'
             return
 
+        all_chapters = []
+        for vol in all_volumes.values():
+            all_chapters.extend(vol['chapters'])
+        all_chapters.sort(key=lambda c: float(c["chapter"]) if c["chapter"].replace(".", "").isdigit() else 999)
+
         downloaded_files = []
         for vol_num in volume_nums:
-            if vol_num not in all_volumes:
+            if is_cancelled():
+                return
+
+            if vol_num.startswith('range:'):
+                r = vol_num[6:].split('-')
+                r_from, r_to = float(r[0]), float(r[1])
+                chapters = [c for c in all_chapters if r_from <= float(c["chapter"]) <= r_to]
+                if not chapters:
+                    progress(f"No chapters in range {r_from}-{r_to}")
+                    continue
+                if source == 'mangapill':
+                    cbz_path = mp_download(manga_title, chapters, INPUT_DIR, progress)
+                elif source == '1manga':
+                    cbz_path = om_download(manga_title, f"Ch{int(r_from)}-{int(r_to)}", chapters, INPUT_DIR, progress)
+            elif vol_num not in all_volumes:
                 progress(f"Volume {vol_num} not found, skipping...")
                 continue
+            else:
+                vol_data = all_volumes[vol_num]
+                if source == 'mangapill':
+                    cbz_path = mp_download(manga_title, vol_data["chapters"], INPUT_DIR, progress)
+                elif source == '1manga':
+                    cbz_path = om_download(manga_title, vol_num, vol_data["chapters"], INPUT_DIR, progress)
 
-            vol_data = all_volumes[vol_num]
-            if source == 'mangapill':
-                cbz_path = mp_download(manga_title, vol_data["chapters"], INPUT_DIR, progress)
-            elif source == '1manga':
-                cbz_path = om_download(manga_title, vol_num, vol_data["chapters"], INPUT_DIR, progress)
             downloaded_files.append(cbz_path)
+            log_download(cbz_path.name)
 
         if auto_convert and downloaded_files and devices:
             progress("Starting conversion...")
@@ -612,7 +826,17 @@ def run_source_download(job_id, source, manga_id, manga_slug, manga_title, volum
                             'path': path,
                         })
 
+            if CLOUD:
+                for cbz_path in downloaded_files:
+                    try:
+                        cbz_path.unlink()
+                        progress(f"Cleaned up {cbz_path.name}")
+                    except OSError:
+                        pass
+
             job['results'] = results
+        else:
+            job['results'] = [{'device': 'Downloaded', 'filename': p.name, 'folder': '_input', 'path': str(p)} for p in downloaded_files]
 
         progress("Done!")
         job['status'] = 'done'
@@ -690,6 +914,173 @@ def preview_image(epub_path, page_idx):
 
         from flask import Response
         return Response(img_data, mimetype=mime)
+
+
+# --- OPDS feed for XTe Ink device ---
+
+def _check_opds_auth():
+    """Verify HTTP Basic auth for OPDS routes."""
+    from flask import Response
+    username = os.environ.get('AUTH_USERNAME', '')
+    password = os.environ.get('AUTH_PASSWORD', '')
+    if not username:
+        return None
+
+    auth = request.authorization
+    if not auth or auth.username != username or auth.password != password:
+        return Response(
+            'Authentication required', 401,
+            {'WWW-Authenticate': 'Basic realm="Comic Book Converter"'}
+        )
+    return None
+
+
+@app.route('/opds')
+def opds_feed():
+    """OPDS acquisition feed for CrossPoint reader on XTe Ink."""
+    from flask import Response
+    auth_err = _check_opds_auth()
+    if auth_err:
+        return auth_err
+
+    if not blob_store.is_configured():
+        feed = '''<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <id>urn:comic-converter</id>
+  <title>Comic Book Converter</title>
+  <updated>{now}</updated>
+</feed>'''.format(now=__import__('datetime').datetime.utcnow().isoformat() + 'Z')
+        return Response(feed, mimetype='application/atom+xml;profile=opds-catalog;kind=acquisition')
+
+    blobs = blob_store.list_files()
+    blobs.sort(key=lambda b: b.get('uploadedAt', ''), reverse=True)
+
+    base_url = request.url_root.rstrip('/')
+    updated = blobs[0]['uploadedAt'] if blobs else __import__('datetime').datetime.utcnow().isoformat() + 'Z'
+
+    def escape_xml(s):
+        return s.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;')
+
+    def format_size(b):
+        if b < 1024: return f"{b} B"
+        if b < 1024 * 1024: return f"{b/1024:.1f} KB"
+        return f"{b/(1024*1024):.1f} MB"
+
+    entries = []
+    for blob in blobs:
+        title = blob['pathname'].replace('books/', '').replace('.epub', '')
+        entries.append(f'''  <entry>
+    <title>{escape_xml(title)}</title>
+    <id>{escape_xml(blob['url'])}</id>
+    <updated>{blob['uploadedAt']}</updated>
+    <content type="text">{escape_xml(title)} ({format_size(blob['size'])})</content>
+    <link rel="http://opds-spec.org/acquisition"
+          href="{base_url}/opds/download?url={__import__('urllib.parse', fromlist=['quote']).quote(blob['url'], safe='')}"
+          type="application/epub+zip"
+          length="{blob['size']}"/>
+  </entry>''')
+
+    feed = f'''<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom"
+      xmlns:opds="http://opds-spec.org/2010/catalog">
+  <id>urn:comic-converter</id>
+  <title>Comic Book Converter</title>
+  <updated>{updated}</updated>
+  <author><name>Comic Book Converter</name></author>
+  <link rel="self" href="{base_url}/opds" type="application/atom+xml;profile=opds-catalog;kind=acquisition"/>
+  <link rel="start" href="{base_url}/opds" type="application/atom+xml;profile=opds-catalog;kind=acquisition"/>
+{chr(10).join(entries)}
+</feed>'''
+
+    return Response(feed, mimetype='application/atom+xml;profile=opds-catalog;kind=acquisition')
+
+
+@app.route('/opds/download')
+def opds_download():
+    """Proxy download from Vercel Blob (auth-protected)."""
+    auth_err = _check_opds_auth()
+    if auth_err:
+        return auth_err
+
+    from flask import Response
+    blob_url = request.args.get('url', '')
+    if not blob_url:
+        return jsonify({'error': 'Missing url param'}), 400
+
+    resp = http_requests.get(blob_url, timeout=120, stream=True)
+    if not resp.ok:
+        return jsonify({'error': 'Download failed'}), 502
+
+    filename = blob_url.split('/')[-1].split('?')[0] or 'book.epub'
+    headers = {
+        'Content-Type': 'application/epub+zip',
+        'Content-Disposition': f'attachment; filename="{filename}"',
+    }
+    if resp.headers.get('content-length'):
+        headers['Content-Length'] = resp.headers['content-length']
+
+    return Response(resp.iter_content(chunk_size=8192), headers=headers)
+
+
+@app.route('/device/books')
+def device_books():
+    """List books on the device catalog (Vercel Blob)."""
+    if not blob_store.is_configured():
+        return jsonify({'configured': False, 'books': []})
+
+    blobs = blob_store.list_files()
+    books = []
+    for b in sorted(blobs, key=lambda x: x.get('uploadedAt', ''), reverse=True):
+        title = b['pathname'].replace('books/', '').replace('.epub', '')
+        size_mb = b['size'] / (1024 * 1024)
+        books.append({
+            'title': title,
+            'url': b['url'],
+            'size': f"{size_mb:.1f} MB",
+            'uploaded': b['uploadedAt'],
+        })
+    return jsonify({'configured': True, 'books': books})
+
+
+@app.route('/device/send', methods=['POST'])
+def device_send():
+    """Upload an EPUB to Vercel Blob for the device catalog."""
+    if not blob_store.is_configured():
+        return jsonify({'error': 'Blob storage not configured. Set BLOB_READ_WRITE_TOKEN.'}), 503
+
+    data = request.json
+    folder = data.get('folder', '')
+    filename = data.get('filename', '')
+    if not folder or not filename:
+        return jsonify({'error': 'Missing folder or filename'}), 400
+
+    filepath = OUTPUT_DIR / folder / filename
+    if not filepath.exists():
+        return jsonify({'error': 'File not found'}), 404
+
+    try:
+        url = blob_store.upload(str(filepath), filename)
+        return jsonify({'ok': True, 'url': url})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/device/delete', methods=['POST'])
+def device_delete():
+    """Remove a book from the device catalog."""
+    if not blob_store.is_configured():
+        return jsonify({'error': 'Not configured'}), 503
+
+    data = request.json
+    url = data.get('url', '')
+    if not url:
+        return jsonify({'error': 'Missing url'}), 400
+
+    try:
+        blob_store.delete(url)
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 if __name__ == '__main__':

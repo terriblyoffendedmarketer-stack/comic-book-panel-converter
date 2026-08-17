@@ -116,6 +116,37 @@
 
   .error { color: var(--danger); margin-top: 6px; font-size: 13px; }
 
+  .cancel-btn {
+    background: none; border: 1px solid var(--danger); color: var(--danger);
+    border-radius: 6px; padding: 4px 12px; font-size: 12px; cursor: pointer;
+    margin-left: 10px; transition: all 0.15s;
+  }
+  .cancel-btn:hover { background: var(--danger); color: #fff; }
+
+  .dl-badge {
+    display: inline-block; background: var(--accent); color: #fff;
+    font-size: 9px; padding: 1px 5px; border-radius: 3px;
+    margin-left: 6px; text-transform: uppercase; letter-spacing: 0.3px;
+    vertical-align: middle; font-weight: 600;
+  }
+
+  .range-row {
+    display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+    background: var(--card); border: 1px solid var(--border); border-radius: 6px;
+    margin-bottom: 8px; font-size: 13px;
+  }
+  .range-row input[type="number"] {
+    width: 70px; padding: 5px 8px; border: 1px solid var(--border);
+    border-radius: 4px; font-size: 13px; background: var(--card); color: var(--text);
+    text-align: center;
+  }
+  .range-row input[type="number"]:focus { border-color: var(--accent); outline: none; }
+  .range-row button {
+    padding: 5px 12px; background: var(--accent); color: #fff; border: none;
+    border-radius: 4px; cursor: pointer; font-size: 12px; white-space: nowrap;
+  }
+  .range-row button:hover { background: var(--accent-hover); }
+
   .file-list-scroll { max-height: 280px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; }
   .file-list-scroll .file-list li:last-child { margin-bottom: 0; }
   .select-bar {
@@ -279,6 +310,10 @@
       </label>
       <div class="setting-desc">When enabled, search results include doujinshi and adult content from MangaDex. Off by default.</div>
     </div>
+    <div class="setting-group" id="diskUsageGroup" style="display:none">
+      <div style="font-size:13px; font-weight:500; margin-bottom:6px">Server Storage</div>
+      <div id="diskUsageInfo" style="font-size:12px; color:var(--muted)">Loading...</div>
+    </div>
     <button class="settings-close" id="settingsClose">Done</button>
   </div>
 </div>
@@ -287,6 +322,7 @@
   <button class="tab active" data-tab="convert">Convert</button>
   <button class="tab" data-tab="mangadex">Download</button>
   <button class="tab" data-tab="preview">Preview</button>
+  <button class="tab" data-tab="device">Device</button>
 </div>
 
 <!-- CONVERT TAB -->
@@ -315,11 +351,15 @@
     </div>
   </div>
 
+  <div id="folderLinks" style="margin-top:8px; display:flex; gap:12px; font-size:12px;">
+  </div>
+
   <button class="primary" id="convertBtn" disabled style="margin-top:12px">Convert</button>
 
   <div class="progress-box" id="convertProgress">
     <span class="spinner"></span>
     <span id="convertProgressText">Starting...</span>
+    <button class="cancel-btn" id="convertCancelBtn">Cancel</button>
     <div class="log" id="convertLog"></div>
   </div>
 
@@ -351,6 +391,14 @@
     </div>
     <div class="volume-list" id="mdVolumeList"></div>
 
+    <div class="range-row" id="mdRangeRow" style="display:none">
+      <span>Custom range:</span>
+      <input type="number" id="mdRangeFrom" min="1" placeholder="From">
+      <span>to</span>
+      <input type="number" id="mdRangeTo" min="1" placeholder="To">
+      <button id="mdRangeAddBtn">Add</button>
+    </div>
+
     <label class="auto-convert-opt">
       <input type="checkbox" id="mdAutoConvert" checked>
       Auto-convert after download
@@ -367,6 +415,7 @@
   <div class="progress-box" id="mdProgress">
     <span class="spinner"></span>
     <span id="mdProgressText">Starting...</span>
+    <button class="cancel-btn" id="mdCancelBtn">Cancel</button>
     <div class="log" id="mdLog"></div>
   </div>
 
@@ -410,6 +459,40 @@
   </div>
 </div>
 
+<!-- DEVICE TAB -->
+<div class="tab-content" id="tab-device">
+  <h2>Send to XTe Ink</h2>
+  <p style="font-size:13px; color:var(--muted); margin-bottom:12px">
+    Send converted EPUBs to your XTe Ink device via OPDS. Books appear in CrossPoint reader.
+  </p>
+
+  <div id="deviceNotConfigured" style="display:none">
+    <div style="padding:20px; background:var(--card); border:1px solid var(--border); border-radius:8px; text-align:center; color:var(--muted); font-size:13px;">
+      <p style="margin-bottom:8px">Blob storage not configured.</p>
+      <p>Set <code>BLOB_READ_WRITE_TOKEN</code>, <code>AUTH_USERNAME</code>, and <code>AUTH_PASSWORD</code> environment variables.</p>
+    </div>
+  </div>
+
+  <div id="deviceConfigured" style="display:none">
+    <h2>Converted EPUBs</h2>
+    <div id="deviceLocalList" style="margin-bottom:16px">
+      <div style="color:var(--muted); font-size:13px">Loading...</div>
+    </div>
+
+    <h2>On device catalog</h2>
+    <div id="deviceBookList">
+      <div style="color:var(--muted); font-size:13px">Loading...</div>
+    </div>
+
+    <div style="margin-top:16px; padding:12px; background:var(--card); border:1px solid var(--border); border-radius:8px; font-size:12px; color:var(--muted);">
+      <strong style="color:var(--text)">OPDS Setup</strong><br>
+      On XTe Ink: Settings &gt; System &gt; OPDS Servers &gt; Add<br>
+      URL: <code id="opdsUrl"></code><br>
+      Use the credentials from your AUTH_USERNAME / AUTH_PASSWORD env vars.
+    </div>
+  </div>
+</div>
+
 <script>
 const CLOUD = {{ 'true' if cloud else 'false' }};
 
@@ -421,7 +504,7 @@ const settingUnfiltered = document.getElementById('settingUnfiltered');
 
 settingUnfiltered.checked = localStorage.getItem('showUnfiltered') === 'true';
 
-settingsBtn.addEventListener('click', () => settingsOverlay.classList.add('open'));
+settingsBtn.addEventListener('click', () => { settingsOverlay.classList.add('open'); if (CLOUD) loadDiskUsage(); });
 settingsClose.addEventListener('click', () => settingsOverlay.classList.remove('open'));
 settingsOverlay.addEventListener('click', e => { if (e.target === settingsOverlay) settingsOverlay.classList.remove('open'); });
 settingUnfiltered.addEventListener('change', () => {
@@ -429,6 +512,16 @@ settingUnfiltered.addEventListener('change', () => {
 });
 
 function isUnfiltered() { return settingUnfiltered.checked; }
+
+if (CLOUD) document.getElementById('diskUsageGroup').style.display = 'block';
+async function loadDiskUsage() {
+  try {
+    const res = await fetch('/disk-usage');
+    const d = await res.json();
+    document.getElementById('diskUsageInfo').innerHTML =
+      `Input: ${d.input_mb} MB &middot; Output: ${d.output_mb} MB<br>Disk: ${d.disk_used_mb} / ${d.disk_total_mb} MB (${d.disk_free_mb} MB free)`;
+  } catch(e) {}
+}
 
 // --- Tab switching ---
 document.querySelectorAll('.tab').forEach(tab => {
@@ -439,6 +532,7 @@ document.querySelectorAll('.tab').forEach(tab => {
     document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
     if (tab.dataset.tab === 'preview') loadPreviewList();
     if (tab.dataset.tab === 'convert') loadExistingFiles();
+    if (tab.dataset.tab === 'device') loadDeviceTab();
   });
 });
 
@@ -489,7 +583,8 @@ async function loadExistingFiles() {
       const li = document.createElement('li');
       const checked = selectedFiles.has(f.name);
       if (checked) li.classList.add('selected');
-      li.innerHTML = `<label><input type="checkbox" value="${f.name}" ${checked ? 'checked' : ''}> ${f.name} <span class="size">${f.size}</span></label>`;
+      const badge = f.downloaded ? '<span class="dl-badge">downloaded</span>' : '';
+      li.innerHTML = `<label><input type="checkbox" value="${f.name}" ${checked ? 'checked' : ''}> ${f.name}${badge} <span class="size">${f.size}</span></label>`;
       li.querySelector('input').addEventListener('change', e => {
         if (e.target.checked) { selectedFiles.add(f.name); li.classList.add('selected'); }
         else { selectedFiles.delete(f.name); li.classList.remove('selected'); }
@@ -567,7 +662,13 @@ convertBtn.addEventListener('click', async () => {
   }
 
   progressBox.style.display = 'none';
-  showResults(resultsBox, allResults);
+  await showResults(resultsBox, allResults);
+  convertBtn.disabled = false;
+});
+
+document.getElementById('convertCancelBtn').addEventListener('click', async () => {
+  await cancelActiveJob();
+  document.getElementById('convertProgress').style.display = 'none';
   convertBtn.disabled = false;
 });
 
@@ -681,14 +782,20 @@ async function selectManga(manga, card) {
     }
 
     const res = await fetch(url);
-    const volumes = await res.json();
-    if (volumes.error) { volList.innerHTML = `<div style="color:var(--danger)">${volumes.error}</div>`; return; }
+    const data = await res.json();
+    if (data.error) { volList.innerHTML = `<div style="color:var(--danger)">${data.error}</div>`; return; }
+
+    const volumes = data.volumes || data;
+    const totalChapters = data.total_chapters || 0;
+    const firstCh = data.first_chapter || '1';
+    const lastCh = data.last_chapter || '1';
 
     volList.innerHTML = '';
     document.getElementById('mdVolCount').textContent = `${volumes.length} volumes`;
 
     if (volumes.length === 0) {
       volList.innerHTML = '<div style="color:var(--muted); padding:10px">No downloadable chapters found.</div>';
+      document.getElementById('mdRangeRow').style.display = 'none';
       return;
     }
 
@@ -708,6 +815,23 @@ async function selectManga(manga, card) {
       });
       volList.appendChild(label);
     });
+
+    const rangeRow = document.getElementById('mdRangeRow');
+    if (source !== 'mangadex') {
+      rangeRow.style.display = 'flex';
+      const fromInput = document.getElementById('mdRangeFrom');
+      const toInput = document.getElementById('mdRangeTo');
+      fromInput.min = firstCh;
+      fromInput.max = lastCh;
+      toInput.min = firstCh;
+      toInput.max = lastCh;
+      fromInput.placeholder = firstCh;
+      toInput.placeholder = lastCh;
+      fromInput.value = '';
+      toInput.value = '';
+    } else {
+      rangeRow.style.display = 'none';
+    }
   } catch (e) {
     volList.innerHTML = `<div style="color:var(--danger)">Failed to load chapters</div>`;
   }
@@ -733,6 +857,33 @@ document.getElementById('mdSelectNoneVols').addEventListener('click', () => {
   });
   selectedVolumes.clear();
   updateMdDownloadBtn();
+});
+
+document.getElementById('mdRangeAddBtn').addEventListener('click', () => {
+  const from = parseInt(document.getElementById('mdRangeFrom').value);
+  const to = parseInt(document.getElementById('mdRangeTo').value);
+  if (isNaN(from) || isNaN(to) || from > to || from < 1) return;
+
+  const rangeKey = `range:${from}-${to}`;
+  selectedVolumes.add(rangeKey);
+
+  const volList = document.getElementById('mdVolumeList');
+  const label = document.createElement('label');
+  label.style.borderColor = 'var(--accent)';
+  label.style.background = 'var(--selected-bg)';
+  label.innerHTML = `
+    <input type="checkbox" value="${rangeKey}" checked>
+    Custom range
+    <span class="vol-meta">Ch. ${from}–${to}</span>`;
+  label.querySelector('input').addEventListener('change', e => {
+    if (e.target.checked) selectedVolumes.add(rangeKey);
+    else selectedVolumes.delete(rangeKey);
+    updateMdDownloadBtn();
+  });
+  volList.insertBefore(label, volList.firstChild);
+  updateMdDownloadBtn();
+  document.getElementById('mdRangeFrom').value = '';
+  document.getElementById('mdRangeTo').value = '';
 });
 
 document.getElementById('mdDownloadBtn').addEventListener('click', async () => {
@@ -780,13 +931,19 @@ document.getElementById('mdDownloadBtn').addEventListener('click', async () => {
 
     const results = await pollJob(job_id, progressText, progressLog);
     progressBox.style.display = 'none';
-    showResults(resultsBox, results);
+    await showResults(resultsBox, results);
   } catch (e) {
     document.getElementById('mdError').textContent = 'Download failed: ' + e.message;
     progressBox.style.display = 'none';
   }
 
   btn.disabled = false;
+});
+
+document.getElementById('mdCancelBtn').addEventListener('click', async () => {
+  await cancelActiveJob();
+  document.getElementById('mdProgress').style.display = 'none';
+  document.getElementById('mdDownloadBtn').disabled = false;
 });
 
 // ===== PREVIEW TAB =====
@@ -904,7 +1061,17 @@ document.addEventListener('keydown', e => {
 });
 
 // ===== SHARED HELPERS =====
+let activeJobId = null;
+
+async function cancelActiveJob() {
+  if (!activeJobId) return;
+  try {
+    await fetch(`/cancel/${activeJobId}`, { method: 'POST' });
+  } catch (e) {}
+}
+
 async function pollJob(jobId, textEl, logEl) {
+  activeJobId = jobId;
   let lastMsgCount = 0;
   while (true) {
     await new Promise(r => setTimeout(r, 1000));
@@ -919,8 +1086,8 @@ async function pollJob(jobId, textEl, logEl) {
       if (job.messages.length > 0) textEl.textContent = job.messages[job.messages.length - 1];
     }
 
-    if (job.status === 'done') return job.results || [];
-    if (job.status === 'error') { addLogEntry(logEl, 'Error: ' + (job.error || 'Unknown')); return []; }
+    if (job.status === 'done') { activeJobId = null; return job.results || []; }
+    if (job.status === 'error') { activeJobId = null; addLogEntry(logEl, 'Error: ' + (job.error || 'Unknown')); return []; }
   }
 }
 
@@ -931,29 +1098,68 @@ function addLogEntry(logEl, msg) {
   logEl.scrollTop = logEl.scrollHeight;
 }
 
-function showResults(container, results) {
+async function triggerDownload(url, filename) {
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+async function showResults(container, results) {
   if (results.length === 0) return;
   container.style.display = 'block';
-  results.forEach(r => {
-    const a = document.createElement('a');
-    if (r.folder) {
-      a.href = `/output/${r.folder}/${r.filename}`;
-      a.textContent = `${r.filename} (${r.device})`;
-      a.download = r.filename;
-    } else {
-      a.href = '#';
-      a.textContent = `Downloaded: ${r.filename}`;
-      a.style.cursor = 'default';
+
+  for (const r of results) {
+    let url;
+    if (r.folder === '_input') {
+      url = `/input/${r.filename}`;
+    } else if (r.folder) {
+      url = `/output/${r.folder}/${r.filename}`;
     }
-    container.appendChild(a);
-  });
+
+    const row = document.createElement('a');
+    if (url) {
+      row.href = url;
+      row.download = r.filename;
+      row.textContent = `${r.filename} (${r.device})`;
+
+      triggerDownload(url, r.filename);
+      if (CLOUD) {
+        const cleanupPath = r.folder === '_input'
+          ? `/cleanup-input/${r.filename}`
+          : `/cleanup/${r.folder}/${r.filename}`;
+        setTimeout(() => fetch(cleanupPath, { method: 'POST' }), 30000);
+      }
+    } else {
+      row.href = '#';
+      row.textContent = `${r.filename}`;
+      row.style.cursor = 'default';
+    }
+    container.appendChild(row);
+  }
+
+  if (results.length > 0) {
+    const note = document.createElement('div');
+    note.style.cssText = 'font-size:11px; color:var(--muted); margin-top:6px; text-align:center;';
+    note.textContent = CLOUD
+      ? `${results.length} file${results.length > 1 ? 's' : ''} saved to your device`
+      : `${results.length} file${results.length > 1 ? 's' : ''} ready`;
+    container.appendChild(note);
+  }
+
   if (!CLOUD) {
-    const openBtn = document.createElement('a');
-    openBtn.href = '#';
-    openBtn.className = 'open-folder';
-    openBtn.textContent = 'Open output folder in Finder';
-    openBtn.addEventListener('click', e => { e.preventDefault(); fetch('/open-output'); });
-    container.appendChild(openBtn);
+    const hasOutput = results.some(r => r.folder && r.folder !== '_input');
+    if (hasOutput) {
+      const openBtn = document.createElement('a');
+      openBtn.href = '#';
+      openBtn.className = 'open-folder';
+      openBtn.textContent = 'Open output folder in Finder';
+      openBtn.addEventListener('click', e => { e.preventDefault(); fetch('/open-folder/output'); });
+      container.appendChild(openBtn);
+    }
   }
 }
 
@@ -961,6 +1167,128 @@ function escapeHtml(s) {
   const d = document.createElement('div');
   d.textContent = s;
   return d.innerHTML;
+}
+
+// Folder links (local only)
+if (!CLOUD) {
+  const fl = document.getElementById('folderLinks');
+  fl.innerHTML = `<a href="#" style="color:var(--accent)" onclick="event.preventDefault();fetch('/open-folder/input')">Open input folder</a>
+    <a href="#" style="color:var(--accent)" onclick="event.preventDefault();fetch('/open-folder/output')">Open output folder</a>`;
+}
+
+// ===== DEVICE TAB =====
+document.getElementById('opdsUrl').textContent = window.location.origin + '/opds';
+
+async function loadDeviceTab() {
+  const booksRes = await fetch('/device/books');
+  const booksData = await booksRes.json();
+
+  if (!booksData.configured) {
+    document.getElementById('deviceNotConfigured').style.display = 'block';
+    document.getElementById('deviceConfigured').style.display = 'none';
+    return;
+  }
+
+  document.getElementById('deviceNotConfigured').style.display = 'none';
+  document.getElementById('deviceConfigured').style.display = 'block';
+
+  // Load local EPUBs available to send
+  const localList = document.getElementById('deviceLocalList');
+  try {
+    const previewRes = await fetch('/preview/list');
+    const epubs = await previewRes.json();
+
+    if (epubs.length === 0) {
+      localList.innerHTML = '<div style="color:var(--muted); font-size:13px">No converted EPUBs yet. Convert some comics first.</div>';
+    } else {
+      localList.innerHTML = '';
+      const catalogUrls = new Set(booksData.books.map(b => b.title));
+      epubs.forEach(epub => {
+        const alreadySent = catalogUrls.has(epub.name.replace('.epub', ''));
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex; align-items:center; justify-content:space-between; padding:7px 10px; background:var(--card); border:1px solid var(--border); border-radius:6px; margin-bottom:3px; font-size:13px;';
+        const info = document.createElement('span');
+        info.textContent = `${epub.name} (${epub.size})`;
+        row.appendChild(info);
+
+        const btn = document.createElement('button');
+        if (alreadySent) {
+          btn.textContent = 'Sent';
+          btn.disabled = true;
+          btn.style.cssText = 'padding:4px 12px; font-size:12px; border:1px solid var(--border); border-radius:4px; background:var(--card); color:var(--muted); cursor:default;';
+        } else {
+          btn.textContent = 'Send to device';
+          btn.style.cssText = 'padding:4px 12px; font-size:12px; border:none; border-radius:4px; background:var(--accent); color:#fff; cursor:pointer; white-space:nowrap;';
+          btn.addEventListener('click', async () => {
+            btn.textContent = 'Sending...';
+            btn.disabled = true;
+            try {
+              const res = await fetch('/device/send', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ folder: epub.folder, filename: epub.name })
+              });
+              const data = await res.json();
+              if (data.ok) {
+                btn.textContent = 'Sent';
+                btn.style.background = 'var(--success-border)';
+                loadDeviceCatalog();
+              } else {
+                btn.textContent = 'Failed';
+                btn.style.background = 'var(--danger)';
+              }
+            } catch(e) {
+              btn.textContent = 'Error';
+            }
+          });
+        }
+        row.appendChild(btn);
+        localList.appendChild(row);
+      });
+    }
+  } catch(e) {
+    localList.innerHTML = '<div style="color:var(--muted); font-size:13px">Failed to load EPUBs</div>';
+  }
+
+  loadDeviceCatalog(booksData.books);
+}
+
+function loadDeviceCatalog(books) {
+  const container = document.getElementById('deviceBookList');
+  if (!books || books.length === 0) {
+    container.innerHTML = '<div style="color:var(--muted); font-size:13px">No books in device catalog yet.</div>';
+    return;
+  }
+
+  container.innerHTML = '';
+  books.forEach(book => {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex; align-items:center; justify-content:space-between; padding:7px 10px; background:var(--card); border:1px solid var(--success-border); border-radius:6px; margin-bottom:3px; font-size:13px;';
+    const info = document.createElement('span');
+    info.innerHTML = `${escapeHtml(book.title)} <span style="color:var(--muted); font-size:11px">${book.size}</span>`;
+    row.appendChild(info);
+
+    const del = document.createElement('button');
+    del.textContent = 'Remove';
+    del.className = 'cancel-btn';
+    del.style.marginLeft = '0';
+    del.addEventListener('click', async () => {
+      del.textContent = 'Removing...';
+      del.disabled = true;
+      try {
+        await fetch('/device/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: book.url })
+        });
+        row.remove();
+      } catch(e) {
+        del.textContent = 'Failed';
+      }
+    });
+    row.appendChild(del);
+    container.appendChild(row);
+  });
 }
 
 // Init

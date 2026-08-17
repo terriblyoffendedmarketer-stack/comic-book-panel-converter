@@ -102,7 +102,16 @@ def get_volumes(manga_id, slug):
 
     chapters.sort(key=lambda c: float(c["chapter"]) if c["chapter"].replace(".", "").isdigit() else 999)
 
-    volumes = {"1": {"chapters": chapters, "chapter_count": len(chapters)}}
+    chunk_size = 10
+    if len(chapters) <= chunk_size:
+        volumes = {"1": {"chapters": chapters, "chapter_count": len(chapters)}}
+    else:
+        volumes = {}
+        for i in range(0, len(chapters), chunk_size):
+            chunk = chapters[i:i + chunk_size]
+            vol_num = str(i // chunk_size + 1)
+            volumes[vol_num] = {"chapters": chunk, "chapter_count": len(chunk)}
+
     return volumes
 
 
@@ -145,31 +154,41 @@ def download_volume_as_cbz(manga_title, chapters, output_dir, progress=None):
         progress(f"Downloading Ch.{ch_first}-{ch_last} ({len(chapters)} chapters)...")
 
     page_num = 0
-    with zipfile.ZipFile(cbz_path, "w", zipfile.ZIP_STORED) as zf:
-        for ci, chapter in enumerate(chapters):
-            if progress:
-                progress(f"  Chapter {chapter['chapter']} ({ci + 1}/{len(chapters)})")
-
-            try:
-                page_urls = _get_chapter_pages(chapter["url"])
-            except Exception as e:
+    try:
+        with zipfile.ZipFile(cbz_path, "w", zipfile.ZIP_STORED) as zf:
+            for ci, chapter in enumerate(chapters):
                 if progress:
-                    progress(f"  Skipping chapter {chapter['chapter']}: {e}")
-                continue
+                    progress(f"  Chapter {chapter['chapter']} ({ci + 1}/{len(chapters)})")
 
-            for pi, url in enumerate(page_urls):
-                time.sleep(0.1)
                 try:
-                    img_r = requests.get(url, headers=HEADERS, timeout=30)
-                    img_r.raise_for_status()
-                    ext = url.rsplit(".", 1)[-1].split("?")[0]
-                    if ext not in ("jpg", "jpeg", "png", "gif", "webp"):
-                        ext = "jpg"
-                    zf.writestr(f"{page_num:05d}.{ext}", img_r.content)
-                    page_num += 1
+                    page_urls = _get_chapter_pages(chapter["url"])
                 except Exception as e:
                     if progress:
-                        progress(f"  Page {pi} failed: {e}")
+                        progress(f"  Skipping chapter {chapter['chapter']}: {e}")
+                    continue
+
+                for pi, url in enumerate(page_urls):
+                    time.sleep(0.1)
+                    try:
+                        img_r = requests.get(url, headers=HEADERS, timeout=30)
+                        img_r.raise_for_status()
+                        ext = url.rsplit(".", 1)[-1].split("?")[0]
+                        if ext not in ("jpg", "jpeg", "png", "gif", "webp"):
+                            ext = "jpg"
+                        zf.writestr(f"{page_num:05d}.{ext}", img_r.content)
+                        page_num += 1
+                    except Exception as e:
+                        if progress:
+                            progress(f"  Page {pi} failed: {e}")
+    except Exception:
+        if cbz_path.exists():
+            cbz_path.unlink()
+        raise
+
+    if page_num == 0:
+        if cbz_path.exists():
+            cbz_path.unlink()
+        raise RuntimeError(f"No pages downloaded for Ch.{ch_first}-{ch_last}")
 
     if progress:
         size_mb = cbz_path.stat().st_size / (1024 * 1024)

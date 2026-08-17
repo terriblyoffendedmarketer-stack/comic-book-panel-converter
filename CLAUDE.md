@@ -4,11 +4,12 @@ Converts comic book files (CBZ/CBR/CB7) into e-reader optimized EPUBs for Kindle
 
 ## Status
 
-**Phase:** Full web app with MangaDex integration, EPUB previewer, and auto-start.
+**Phase:** Full web app with multi-source manga download, volume selection, cloud storage management.
 **Current:** Three-tab web UI at `http://localhost:8080`:
-- **Convert tab**: Drop files or pick from input/, select device(s), click Convert. Output to `output/XTe Ink/` and `output/Kindle/`.
-- **MangaDex tab**: Search manga, select volumes, download as CBZ to input/. Optional auto-convert after download.
+- **Convert tab**: Drop files or pick from input/, select device(s), click Convert. Cancel button. Open input/output folder links. Download badge on files from manga sources.
+- **Download tab**: Three sources (MangaDex, MangaPill, 1manga). Per-volume selection with Select All, custom chapter range picker. Cancel button. Auto-convert option.
 - **Preview tab**: View converted EPUBs at exact device viewport (480x800 XTe Ink or 1072x1448 Kindle). Arrow key navigation.
+**Cloud storage**: Auto-cleanup of source CBZs after conversion in cloud mode. Download links for saving EPUBs to user's device. Delete-from-server button. Disk usage in settings.
 **Conversion modes:**
 - **XTe Ink**: Panel-aware overlapping thirds — splits pages into 2-3 overlapping strips snapped to gutters. E-ink optimized.
 - **Kindle**: KCC for fixed-layout EPUB with virtual panel view.
@@ -89,6 +90,8 @@ Three download sources available via the Download tab:
 - Port 5000 conflicts with macOS AirPlay Receiver → uses port 8080
 - KCC needs `7zz` binary → symlink from `7z` if using p7zip
 - MangaDex rate limit is 5 req/sec — downloads sleep 0.15s between pages
+- Panel detection parallelized via subprocesses (not threads — OpenCV holds GIL, fork deadlocks on macOS)
+- Cloud mode auto-deletes source CBZs after conversion to avoid filling Fly.io volume (1 GB default)
 
 ## File Map
 
@@ -101,6 +104,7 @@ Three download sources available via the Download tab:
 - `src/convert.py` — CLI entry point, dual-path: `--device kindle|xteink`
 - `src/extract.py` — extracts pages from CBZ/CBR/CB7, parses ComicInfo.xml
 - `src/detect_panels.py` — panel detection + grouping
+- `src/panel_worker.py` — subprocess worker for parallel panel detection (spawned by web_app.py)
 - `src/kumiko/` — Kumiko library patched for OpenCV 5.0
 - `src/build_epub.py` — view-per-page EPUB builder with viewport, cover, rotation
 - `src/templates/index.html` — web UI (tabs: Convert, MangaDex, Preview)
