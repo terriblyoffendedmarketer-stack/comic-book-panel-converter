@@ -119,68 +119,66 @@ def convert_xteink_thirds(comic_path, manga, title, progress, is_cancelled=None)
 
     progress("Extracting pages...")
     pages_dir = extract(comic_path, output_base=OUTPUT_DIR)
-
-    skip = ("_debug", "_grouped")
-    pages = sorted(
-        [p for p in pages_dir.iterdir()
-         if p.suffix.lower() in {'.jpg', '.jpeg', '.png'} and not any(s in p.name for s in skip)],
-        key=lambda f: natural_sort_key(f.name)
-    )
-
-    if not pages:
-        raise ValueError(f"No pages found in {pages_dir}")
-
     views_dir = OUTPUT_DIR / f"{pages_dir.name}_views"
-    views_dir.mkdir(parents=True, exist_ok=True)
 
-    total_pages = len(pages)
-    cover_path = None
+    try:
+        skip = ("_debug", "_grouped")
+        pages = sorted(
+            [p for p in pages_dir.iterdir()
+             if p.suffix.lower() in {'.jpg', '.jpeg', '.png'} and not any(s in p.name for s in skip)],
+            key=lambda f: natural_sort_key(f.name)
+        )
 
-    progress(f"Detecting panels ({total_pages} pages, {NUM_WORKERS} workers)...")
-    pages_to_detect = pages[1:]
-    panel_cache = detect_panels_parallel(pages_to_detect, manga)
+        if not pages:
+            raise ValueError(f"No pages found in {pages_dir}")
 
-    for page_idx, page_path in enumerate(pages):
-        if is_cancelled and is_cancelled():
-            shutil.rmtree(pages_dir, ignore_errors=True)
-            shutil.rmtree(views_dir, ignore_errors=True)
-            return None
+        views_dir.mkdir(parents=True, exist_ok=True)
 
-        progress(f"Processing page {page_idx + 1} of {total_pages}...")
-        img = Image.open(page_path)
-        w, h = img.size
+        total_pages = len(pages)
+        cover_path = None
 
-        if page_idx == 0:
-            cover = process_cover_for_eink(img, device['width'], device['height'])
-            vp = views_dir / f"page_{page_idx:04d}_view_00.jpg"
-            cover.save(vp, "JPEG", quality=95)
-            cover_path = vp
-            continue
+        progress(f"Detecting panels ({total_pages} pages, {NUM_WORKERS} workers)...")
+        pages_to_detect = pages[1:]
+        panel_cache = detect_panels_parallel(pages_to_detect, manga)
 
-        panels = panel_cache.get(str(page_path), detect_panels(page_path, manga=manga))
-        regions = split_page(img, panels)
+        for page_idx, page_path in enumerate(pages):
+            if is_cancelled and is_cancelled():
+                return None
 
-        for ri, (rx, ry, rw, rh) in enumerate(regions):
-            crop = img.crop((rx, ry, rx + rw, ry + rh))
-            processed = process_for_eink(crop, device['width'], device['height'])
-            vp = views_dir / f"page_{page_idx:04d}_view_{ri:02d}.jpg"
-            processed.save(vp, "JPEG", quality=92)
+            progress(f"Processing page {page_idx + 1} of {total_pages}...")
+            img = Image.open(page_path)
 
-    progress("Building EPUB...")
-    epub_path = build_epub(
-        views_dir,
-        title=title,
-        output_path=out_dir / f"{title}.epub",
-        cover_image_path=cover_path,
-        manga=manga,
-        max_width=device['width'],
-        max_height=device['height'],
-    )
+            if page_idx == 0:
+                cover = process_cover_for_eink(img, device['width'], device['height'])
+                vp = views_dir / f"page_{page_idx:04d}_view_00.jpg"
+                cover.save(vp, "JPEG", quality=95)
+                cover_path = vp
+                continue
 
-    shutil.rmtree(pages_dir, ignore_errors=True)
-    shutil.rmtree(views_dir, ignore_errors=True)
+            panels = panel_cache.get(str(page_path), detect_panels(page_path, manga=manga))
+            regions = split_page(img, panels)
 
-    return str(epub_path)
+            for ri, (rx, ry, rw, rh) in enumerate(regions):
+                crop = img.crop((rx, ry, rx + rw, ry + rh))
+                processed = process_for_eink(crop, device['width'], device['height'])
+                vp = views_dir / f"page_{page_idx:04d}_view_{ri:02d}.jpg"
+                processed.save(vp, "JPEG", quality=92)
+
+        progress("Building EPUB...")
+        epub_path = build_epub(
+            views_dir,
+            title=title,
+            output_path=out_dir / f"{title}.epub",
+            cover_image_path=cover_path,
+            manga=manga,
+            max_width=device['width'],
+            max_height=device['height'],
+        )
+
+        return str(epub_path)
+    finally:
+        shutil.rmtree(pages_dir, ignore_errors=True)
+        shutil.rmtree(views_dir, ignore_errors=True)
 
 
 def convert_kindle(comic_path, manga, title, progress):
@@ -452,6 +450,12 @@ def start_convert():
     filepath = INPUT_DIR / filename
     if not filepath.exists():
         return jsonify({'error': f'File not found: {filename}'}), 404
+
+    if CLOUD:
+        free_mb = shutil.disk_usage(str(DATA_DIR)).free / (1024 * 1024)
+        file_mb = filepath.stat().st_size / (1024 * 1024)
+        if free_mb < file_mb * 2:
+            return jsonify({'error': f'Not enough disk space ({free_mb:.0f} MB free, need ~{file_mb*2:.0f} MB). Delete some files first.'}), 400
 
     job_id = str(uuid.uuid4())[:8]
     jobs[job_id] = {

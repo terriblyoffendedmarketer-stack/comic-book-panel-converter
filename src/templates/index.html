@@ -1133,24 +1133,17 @@ async function showResults(container, results) {
   for (const r of results) {
     let url;
     if (r.folder === '_input') {
-      url = `/input/${r.filename}`;
+      url = `/input/${encodeURIComponent(r.filename)}`;
     } else if (r.folder) {
-      url = `/output/${r.folder}/${r.filename}`;
+      url = `/output/${r.folder}/${encodeURIComponent(r.filename)}`;
     }
 
     const row = document.createElement('a');
     if (url) {
       row.href = url;
       row.download = r.filename;
-      row.textContent = `${r.filename} (${r.device})`;
-
-      triggerDownload(url, r.filename);
-      if (CLOUD) {
-        const cleanupPath = r.folder === '_input'
-          ? `/cleanup-input/${r.filename}`
-          : `/cleanup/${r.folder}/${r.filename}`;
-        setTimeout(() => fetch(cleanupPath, { method: 'POST' }), 30000);
-      }
+      row.textContent = `⬇ ${r.filename} (${r.device})`;
+      row.style.cssText = 'display:block; padding:8px 12px; background:var(--accent); color:#fff; border-radius:6px; text-align:center; text-decoration:none; margin-bottom:4px; font-weight:500;';
     } else {
       row.href = '#';
       row.textContent = `${r.filename}`;
@@ -1163,7 +1156,7 @@ async function showResults(container, results) {
     const note = document.createElement('div');
     note.style.cssText = 'font-size:11px; color:var(--muted); margin-top:6px; text-align:center;';
     note.textContent = CLOUD
-      ? `${results.length} file${results.length > 1 ? 's' : ''} saved to your device`
+      ? `Tap each file to save to your device`
       : `${results.length} file${results.length > 1 ? 's' : ''} ready`;
     container.appendChild(note);
   }
