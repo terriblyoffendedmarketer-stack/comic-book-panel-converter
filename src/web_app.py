@@ -81,8 +81,8 @@ PANEL_WORKER = str(ROOT / 'src' / 'panel_worker.py')
 
 
 def detect_panels_parallel(pages, manga):
-    """Detect panels for all pages in parallel using subprocesses."""
-    if len(pages) <= 2:
+    """Detect panels for all pages using subprocesses (or in-process if single worker)."""
+    if len(pages) <= 2 or NUM_WORKERS <= 1:
         return {str(p): detect_panels(p, manga=manga) for p in pages}
 
     batch_size = math.ceil(len(pages) / NUM_WORKERS)
@@ -137,9 +137,12 @@ def convert_xteink_thirds(comic_path, manga, title, progress, is_cancelled=None)
         total_pages = len(pages)
         cover_path = None
 
-        progress(f"Detecting panels ({total_pages} pages, {NUM_WORKERS} workers)...")
-        pages_to_detect = pages[1:]
-        panel_cache = detect_panels_parallel(pages_to_detect, manga)
+        skip_detection = manga or total_pages > 100
+        panel_cache = {}
+        if not skip_detection:
+            progress(f"Detecting panels ({total_pages} pages, {NUM_WORKERS} workers)...")
+            pages_to_detect = pages[1:]
+            panel_cache = detect_panels_parallel(pages_to_detect, manga)
 
         for page_idx, page_path in enumerate(pages):
             if is_cancelled and is_cancelled():
@@ -155,8 +158,11 @@ def convert_xteink_thirds(comic_path, manga, title, progress, is_cancelled=None)
                 cover_path = vp
                 continue
 
-            panels = panel_cache.get(str(page_path), detect_panels(page_path, manga=manga))
-            regions = split_page(img, panels)
+            if skip_detection:
+                regions = split_page(img, [])
+            else:
+                panels = panel_cache.get(str(page_path), detect_panels(page_path, manga=manga))
+                regions = split_page(img, panels)
 
             for ri, (rx, ry, rw, rh) in enumerate(regions):
                 crop = img.crop((rx, ry, rx + rw, ry + rh))
@@ -308,6 +314,7 @@ def run_mangadex_download(job_id, manga_id, manga_title, volume_nums, auto_conve
                 vol_data["chapters"], INPUT_DIR, progress
             )
             downloaded_files.append(cbz_path)
+            Path(cbz_path).with_suffix('.manga').touch()
             log_download(cbz_path.name)
 
         if auto_convert and downloaded_files and devices:
@@ -343,6 +350,7 @@ def run_mangadex_download(job_id, manga_id, manga_title, volume_nums, auto_conve
                 for cbz_path in downloaded_files:
                     try:
                         cbz_path.unlink()
+                        Path(cbz_path).with_suffix('.manga').unlink(missing_ok=True)
                         progress(f"Cleaned up {cbz_path.name}")
                     except OSError:
                         pass
@@ -536,6 +544,7 @@ def cleanup_input_file(filepath):
     if target.exists():
         try:
             target.unlink()
+            target.with_suffix('.manga').unlink(missing_ok=True)
         except OSError as e:
             return jsonify({'error': str(e)}), 500
     stem = Path(filepath).stem
@@ -804,6 +813,7 @@ def run_source_download(job_id, source, manga_id, manga_slug, manga_title, volum
                     cbz_path = om_download(manga_title, vol_num, vol_data["chapters"], INPUT_DIR, progress)
 
             downloaded_files.append(cbz_path)
+            Path(cbz_path).with_suffix('.manga').touch()
             log_download(cbz_path.name)
 
         if auto_convert and downloaded_files and devices:
@@ -839,6 +849,7 @@ def run_source_download(job_id, source, manga_id, manga_slug, manga_title, volum
                 for cbz_path in downloaded_files:
                     try:
                         cbz_path.unlink()
+                        Path(cbz_path).with_suffix('.manga').unlink(missing_ok=True)
                         progress(f"Cleaned up {cbz_path.name}")
                     except OSError:
                         pass

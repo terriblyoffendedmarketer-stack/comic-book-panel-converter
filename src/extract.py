@@ -54,6 +54,10 @@ def detect_reading_direction(comic_path):
     comic_path = Path(comic_path)
     ext = comic_path.suffix.lower()
 
+    marker = comic_path.with_suffix('.manga')
+    if marker.exists():
+        return 'rtl', 'manga source marker'
+
     metadata = None
     if ext == '.cbz':
         try:
