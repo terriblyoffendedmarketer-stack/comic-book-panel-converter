@@ -367,6 +367,13 @@
 
   <div class="results" id="convertResults"></div>
   <div class="error" id="convertError"></div>
+
+  <div id="outputFilesSection" style="margin-top:16px; display:none;">
+    <div class="select-bar">
+      <span>Converted files</span>
+    </div>
+    <div id="outputFilesList" style="max-height:200px; overflow-y:auto;"></div>
+  </div>
 </div>
 
 <!-- DOWNLOAD TAB -->
@@ -465,7 +472,7 @@
 <div class="tab-content" id="tab-device">
   <h2>Send to XTe Ink</h2>
   <p style="font-size:13px; color:var(--muted); margin-bottom:12px">
-    Send converted EPUBs to your XTe Ink device via OPDS. Books appear in CrossPoint reader.
+    Send converted files to your XTe Ink device via OPDS. Books appear in CrossPoint reader.
   </p>
 
   <div id="deviceNotConfigured" style="display:none">
@@ -533,7 +540,7 @@ document.querySelectorAll('.tab').forEach(tab => {
     tab.classList.add('active');
     document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
     if (tab.dataset.tab === 'preview') loadPreviewList();
-    if (tab.dataset.tab === 'convert') loadExistingFiles();
+    if (tab.dataset.tab === 'convert') { loadExistingFiles(); loadOutputFiles(); }
     if (tab.dataset.tab === 'device') loadDeviceTab();
   });
 });
@@ -604,6 +611,52 @@ async function loadExistingFiles() {
     updateConvertBtn();
   } catch (e) {
     existingFiles.innerHTML = '<li style="color:var(--muted)">Could not load files</li>';
+  }
+}
+
+async function loadOutputFiles() {
+  const section = document.getElementById('outputFilesSection');
+  const list = document.getElementById('outputFilesList');
+  try {
+    const res = await fetch('/preview/list');
+    const files = await res.json();
+    if (files.length === 0) {
+      section.style.display = 'none';
+      return;
+    }
+    section.style.display = 'block';
+    list.innerHTML = '';
+    files.forEach(f => {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex; align-items:center; justify-content:space-between; padding:6px 10px; background:var(--card); border:1px solid var(--border); border-radius:6px; margin-bottom:3px; font-size:13px;';
+      const info = document.createElement('span');
+      info.textContent = `${f.name} (${f.size})`;
+      row.appendChild(info);
+      const btns = document.createElement('span');
+      btns.style.cssText = 'display:flex; gap:6px; flex-shrink:0;';
+      const dlBtn = document.createElement('a');
+      dlBtn.href = `/output/${f.folder}/${encodeURIComponent(f.name)}`;
+      dlBtn.download = f.name;
+      dlBtn.textContent = 'Download';
+      dlBtn.style.cssText = 'padding:3px 10px; font-size:12px; border:1px solid var(--accent); border-radius:4px; color:var(--accent); text-decoration:none; cursor:pointer;';
+      btns.appendChild(dlBtn);
+      const delBtn = document.createElement('button');
+      delBtn.textContent = 'Delete';
+      delBtn.className = 'cancel-btn';
+      delBtn.style.marginLeft = '0';
+      delBtn.addEventListener('click', async () => {
+        delBtn.textContent = '...';
+        delBtn.disabled = true;
+        await fetch('/cleanup/' + f.folder + '/' + encodeURIComponent(f.name), { method: 'POST' });
+        row.remove();
+        if (list.children.length === 0) section.style.display = 'none';
+      });
+      btns.appendChild(delBtn);
+      row.appendChild(btns);
+      list.appendChild(row);
+    });
+  } catch(e) {
+    section.style.display = 'none';
   }
 }
 
@@ -681,6 +734,7 @@ convertBtn.addEventListener('click', async () => {
 
   progressBox.style.display = 'none';
   await showResults(resultsBox, allResults);
+  loadOutputFiles();
   convertBtn.disabled = false;
 });
 
@@ -1210,12 +1264,12 @@ async function loadDeviceTab() {
     const epubs = await previewRes.json();
 
     if (epubs.length === 0) {
-      localList.innerHTML = '<div style="color:var(--muted); font-size:13px">No converted EPUBs yet. Convert some comics first.</div>';
+      localList.innerHTML = '<div style="color:var(--muted); font-size:13px">No converted files yet. Convert some comics first.</div>';
     } else {
       localList.innerHTML = '';
       const catalogUrls = new Set(booksData.books.map(b => b.title));
       epubs.forEach(epub => {
-        const alreadySent = catalogUrls.has(epub.name.replace('.epub', ''));
+        const alreadySent = catalogUrls.has(epub.name.replace('.epub', '').replace('.xtc', ''));
         const row = document.createElement('div');
         row.style.cssText = 'display:flex; align-items:center; justify-content:space-between; padding:7px 10px; background:var(--card); border:1px solid var(--border); border-radius:6px; margin-bottom:3px; font-size:13px;';
         const info = document.createElement('span');
@@ -1258,7 +1312,7 @@ async function loadDeviceTab() {
       });
     }
   } catch(e) {
-    localList.innerHTML = '<div style="color:var(--muted); font-size:13px">Failed to load EPUBs</div>';
+    localList.innerHTML = '<div style="color:var(--muted); font-size:13px">Failed to load converted files</div>';
   }
 
   loadDeviceCatalog(booksData.books);
@@ -1304,6 +1358,7 @@ function loadDeviceCatalog(books) {
 
 // Init
 loadExistingFiles();
+loadOutputFiles();
 </script>
 
 </body>

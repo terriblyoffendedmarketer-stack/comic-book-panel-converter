@@ -176,21 +176,19 @@ def floyd_steinberg_dither(img):
 
 
 def process_for_eink(img, target_width=480, target_height=800):
-    """Optimize segment for e-ink: grayscale, rotate to landscape, contrast,
-    sharpen, resize, Floyd-Steinberg dither.
+    """Optimize segment for e-ink following xtcjs pipeline order:
+    grayscale → contrast → rotate → resize → sharpen → dither.
 
-    Segments from overlapping thirds are wide and short (landscape aspect).
-    Rotating 90° makes them fill the 480x800 screen when the device is held
-    in landscape orientation — matching the xtcjs default.
+    Sharpen AFTER resize so downscaling doesn't blur it away.
+    Contrast cutoff matches xtcjs defaults (3% black, 12% white).
     """
     if img.mode != 'L':
         img = img.convert('L')
 
+    img = ImageOps.autocontrast(img, cutoff=(3, 12))
+
     if img.width > img.height:
         img = img.transpose(Image.ROTATE_90)
-
-    img = ImageOps.autocontrast(img, cutoff=0.5)
-    img = img.filter(ImageFilter.SHARPEN)
 
     img.thumbnail((target_width, target_height), Image.LANCZOS)
 
@@ -198,6 +196,8 @@ def process_for_eink(img, target_width=480, target_height=800):
     x_offset = (target_width - img.width) // 2
     y_offset = (target_height - img.height) // 2
     bg.paste(img, (x_offset, y_offset))
+
+    bg = bg.filter(ImageFilter.UnsharpMask(radius=1, percent=70, threshold=0))
 
     bg = floyd_steinberg_dither(bg)
 
@@ -205,11 +205,11 @@ def process_for_eink(img, target_width=480, target_height=800):
 
 
 def process_cover_for_eink(img, target_width=480, target_height=800):
-    """Process cover image for e-ink: grayscale, contrast, resize, dither. No splitting."""
+    """Process cover image for e-ink: grayscale, contrast, resize, sharpen, dither. No splitting."""
     if img.mode != 'L':
         img = img.convert('L')
 
-    img = ImageOps.autocontrast(img, cutoff=0.3)
+    img = ImageOps.autocontrast(img, cutoff=(3, 12))
 
     img.thumbnail((target_width, target_height), Image.LANCZOS)
 
@@ -217,6 +217,8 @@ def process_cover_for_eink(img, target_width=480, target_height=800):
     x_offset = (target_width - img.width) // 2
     y_offset = (target_height - img.height) // 2
     bg.paste(img, (x_offset, y_offset))
+
+    bg = bg.filter(ImageFilter.UnsharpMask(radius=1, percent=70, threshold=0))
 
     bg = floyd_steinberg_dither(bg)
 
