@@ -1,6 +1,7 @@
 rarfile
 py7zr
 Pillow
+numpy
 opencv-python-headless
 ebooklib
 kindlecomicconverter @ git+https://github.com/ciromattia/kcc.git

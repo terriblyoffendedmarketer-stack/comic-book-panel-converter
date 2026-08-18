@@ -16,6 +16,7 @@
 
 from PIL import Image, ImageOps, ImageFilter
 import math
+import numpy as np
 
 
 def calculate_overlap_segments(width, height):
@@ -166,10 +167,59 @@ def split_page(img, panels):
     return segments
 
 
+def floyd_steinberg_dither(img):
+    """Floyd-Steinberg dithering with serpentine scanning and error clamping.
+
+    Replicates xtcjs dithering pipeline: unsharp mask → serpentine error
+    diffusion with clamped error (±96) to prevent streak artifacts.
+    """
+    pixels = np.array(img, dtype=np.float32)
+    h, w = pixels.shape
+
+    ERROR_CLAMP = 96.0
+
+    for y in range(h):
+        reverse = (y & 1) == 1
+        x_range = range(w - 1, -1, -1) if reverse else range(w)
+        d = -1 if reverse else 1
+
+        for x in x_range:
+            old = pixels[y, x]
+            new = 255.0 if old >= 128 else 0.0
+            pixels[y, x] = new
+            err = old - new
+            if err > ERROR_CLAMP:
+                err = ERROR_CLAMP
+            elif err < -ERROR_CLAMP:
+                err = -ERROR_CLAMP
+
+            xa = x + d
+            xb = x - d
+            if 0 <= xa < w:
+                pixels[y, xa] += err * 7 / 16
+            if y + 1 < h:
+                if 0 <= xb < w:
+                    pixels[y + 1, xb] += err * 3 / 16
+                pixels[y + 1, x] += err * 5 / 16
+                if 0 <= xa < w:
+                    pixels[y + 1, xa] += err * 1 / 16
+
+    return Image.fromarray(np.clip(pixels, 0, 255).astype(np.uint8), mode='L')
+
+
 def process_for_eink(img, target_width=480, target_height=800):
-    """Optimize image for e-ink display: grayscale, contrast, sharpen, resize."""
+    """Optimize segment for e-ink: grayscale, rotate to landscape, contrast,
+    sharpen, resize, Floyd-Steinberg dither.
+
+    Segments from overlapping thirds are wide and short (landscape aspect).
+    Rotating 90° makes them fill the 480x800 screen when the device is held
+    in landscape orientation — matching the xtcjs default.
+    """
     if img.mode != 'L':
         img = img.convert('L')
+
+    if img.width > img.height:
+        img = img.transpose(Image.ROTATE_90)
 
     img = ImageOps.autocontrast(img, cutoff=0.5)
     img = img.filter(ImageFilter.SHARPEN)
@@ -181,11 +231,13 @@ def process_for_eink(img, target_width=480, target_height=800):
     y_offset = (target_height - img.height) // 2
     bg.paste(img, (x_offset, y_offset))
 
+    bg = floyd_steinberg_dither(bg)
+
     return bg
 
 
 def process_cover_for_eink(img, target_width=480, target_height=800):
-    """Process cover image for e-ink: grayscale, contrast, resize. No splitting."""
+    """Process cover image for e-ink: grayscale, contrast, resize, dither. No splitting."""
     if img.mode != 'L':
         img = img.convert('L')
 
@@ -197,5 +249,7 @@ def process_cover_for_eink(img, target_width=480, target_height=800):
     x_offset = (target_width - img.width) // 2
     y_offset = (target_height - img.height) // 2
     bg.paste(img, (x_offset, y_offset))
+
+    bg = floyd_steinberg_dither(bg)
 
     return bg
