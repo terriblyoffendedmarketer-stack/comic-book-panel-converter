@@ -31,6 +31,7 @@ from extract import extract, detect_reading_direction
 from detect_panels import detect_panels
 from split_page import split_page, process_for_eink, process_cover_for_eink
 from build_epub import build_epub
+from build_xtc import image_to_xtg, build_xtc
 from mangadex import search_manga, get_volumes, download_volume_as_cbz
 from mangapill import search_manga as mp_search, get_volumes as mp_volumes, download_volume_as_cbz as mp_download
 from onemanga import search_manga as om_search, get_volumes as om_volumes, download_volume_as_cbz as om_download
@@ -112,14 +113,13 @@ def detect_panels_parallel(pages, manga):
 
 
 def convert_xteink_thirds(comic_path, manga, title, progress, is_cancelled=None):
-    """Convert for XTe Ink using panel-aware overlapping thirds + e-ink dithering."""
+    """Convert for XTe Ink using overlapping thirds + XTC native format."""
     device = DEVICE_PROFILES['xteink']
     out_dir = OUTPUT_DIR / device['folder']
     out_dir.mkdir(parents=True, exist_ok=True)
 
     progress("Extracting pages...")
     pages_dir = extract(comic_path, output_base=OUTPUT_DIR)
-    views_dir = OUTPUT_DIR / f"{pages_dir.name}_views"
 
     try:
         skip = ("_debug", "_grouped")
@@ -132,10 +132,8 @@ def convert_xteink_thirds(comic_path, manga, title, progress, is_cancelled=None)
         if not pages:
             raise ValueError(f"No pages found in {pages_dir}")
 
-        views_dir.mkdir(parents=True, exist_ok=True)
-
         total_pages = len(pages)
-        cover_path = None
+        xtg_pages = []
 
         skip_detection = manga or total_pages > 100
         panel_cache = {}
@@ -153,9 +151,7 @@ def convert_xteink_thirds(comic_path, manga, title, progress, is_cancelled=None)
 
             if page_idx == 0:
                 cover = process_cover_for_eink(img, device['width'], device['height'])
-                vp = views_dir / f"page_{page_idx:04d}_view_00.jpg"
-                cover.save(vp, "JPEG", quality=95)
-                cover_path = vp
+                xtg_pages.append(image_to_xtg(cover))
                 continue
 
             if skip_detection:
@@ -167,24 +163,16 @@ def convert_xteink_thirds(comic_path, manga, title, progress, is_cancelled=None)
             for ri, (rx, ry, rw, rh) in enumerate(regions):
                 crop = img.crop((rx, ry, rx + rw, ry + rh))
                 processed = process_for_eink(crop, device['width'], device['height'])
-                vp = views_dir / f"page_{page_idx:04d}_view_{ri:02d}.jpg"
-                processed.save(vp, "JPEG", quality=92)
+                xtg_pages.append(image_to_xtg(processed))
 
-        progress("Building EPUB...")
-        epub_path = build_epub(
-            views_dir,
-            title=title,
-            output_path=out_dir / f"{title}.epub",
-            cover_image_path=cover_path,
-            manga=manga,
-            max_width=device['width'],
-            max_height=device['height'],
-        )
+        progress("Building XTC...")
+        xtc_path = out_dir / f"{title}.xtc"
+        xtc_data = build_xtc(xtg_pages, title=title)
+        xtc_path.write_bytes(xtc_data)
 
-        return str(epub_path)
+        return str(xtc_path)
     finally:
         shutil.rmtree(pages_dir, ignore_errors=True)
-        shutil.rmtree(views_dir, ignore_errors=True)
 
 
 def convert_kindle(comic_path, manga, title, progress):
@@ -875,7 +863,7 @@ def preview_list():
         folder_path = OUTPUT_DIR / folder
         if folder_path.exists():
             for f in sorted(folder_path.iterdir(), key=lambda x: x.name.lower()):
-                if f.suffix.lower() == '.epub':
+                if f.suffix.lower() in ('.epub', '.xtc'):
                     size_mb = f.stat().st_size / (1024 * 1024)
                     epubs.append({
                         'name': f.name,
@@ -988,7 +976,9 @@ def opds_feed():
 
     entries = []
     for blob in blobs:
-        title = blob['pathname'].replace('books/', '').replace('.epub', '')
+        pathname = blob['pathname'].replace('books/', '')
+        title = pathname.replace('.epub', '').replace('.xtc', '')
+        mime_type = 'application/octet-stream' if pathname.endswith('.xtc') else 'application/epub+zip'
         entries.append(f'''  <entry>
     <title>{escape_xml(title)}</title>
     <id>{escape_xml(blob['url'])}</id>
@@ -996,7 +986,7 @@ def opds_feed():
     <content type="text">{escape_xml(title)} ({format_size(blob['size'])})</content>
     <link rel="http://opds-spec.org/acquisition"
           href="{base_url}/opds/download?url={__import__('urllib.parse', fromlist=['quote']).quote(blob['url'], safe='')}"
-          type="application/epub+zip"
+          type="{mime_type}"
           length="{blob['size']}"/>
   </entry>''')
 
@@ -1032,8 +1022,9 @@ def opds_download():
         return jsonify({'error': 'Download failed'}), 502
 
     filename = blob_url.split('/')[-1].split('?')[0] or 'book.epub'
+    content_type = 'application/octet-stream' if filename.endswith('.xtc') else 'application/epub+zip'
     headers = {
-        'Content-Type': 'application/epub+zip',
+        'Content-Type': content_type,
         'Content-Disposition': f'attachment; filename="{filename}"',
     }
     if resp.headers.get('content-length'):
@@ -1051,7 +1042,7 @@ def device_books():
     blobs = blob_store.list_files()
     books = []
     for b in sorted(blobs, key=lambda x: x.get('uploadedAt', ''), reverse=True):
-        title = b['pathname'].replace('books/', '').replace('.epub', '')
+        title = b['pathname'].replace('books/', '').replace('.epub', '').replace('.xtc', '')
         size_mb = b['size'] / (1024 * 1024)
         books.append({
             'title': title,

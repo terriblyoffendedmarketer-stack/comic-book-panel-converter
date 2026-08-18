@@ -1,6 +1,6 @@
 # Comic Book Panel Converter
 
-Converts comic book files (CBZ/CBR/CB7) into e-reader optimized EPUBs for Kindle and XTe Ink X4. Also downloads manga from MangaDex.
+Converts comic book files (CBZ/CBR/CB7) into e-reader optimized formats: XTC for XTe Ink X4 (native format, zero decode overhead) and EPUB for Kindle. Also downloads manga from MangaDex, MangaPill, and 1manga.
 
 ## Status
 
@@ -11,7 +11,7 @@ Converts comic book files (CBZ/CBR/CB7) into e-reader optimized EPUBs for Kindle
 - **Preview tab**: View converted EPUBs at exact device viewport (480x800 XTe Ink or 1072x1448 Kindle). Arrow key navigation.
 **Cloud storage**: Auto-cleanup of source CBZs after conversion in cloud mode. Download links for saving EPUBs to user's device. Delete-from-server button. Disk usage in settings.
 **Conversion modes:**
-- **XTe Ink**: Panel-aware overlapping thirds — splits pages into 2-3 overlapping strips snapped to gutters. E-ink optimized.
+- **XTe Ink**: Overlapping thirds (xtcjs algorithm) with gutter snapping, landscape rotation, Floyd-Steinberg dithering. Outputs XTC native format (1-bit packed, instant page turns on CrossPoint).
 - **Kindle**: KCC for fixed-layout EPUB with virtual panel view.
 **Tested on:** Civil War collection (104 files), Amazing SpiderMan, Riddler, Sandman, Punpun, Chainsaw Man (MangaDex).
 **Next:** Cloud deployment (Railway/Fly.io), landscape-first mode.
@@ -105,7 +105,8 @@ Three download sources available via the Download tab:
 - `src/detect_panels.py` — panel detection + grouping
 - `src/panel_worker.py` — subprocess worker for parallel panel detection (spawned by web_app.py)
 - `src/kumiko/` — Kumiko library patched for OpenCV 5.0
-- `src/build_epub.py` — view-per-page EPUB builder with viewport, cover, rotation
+- `src/build_epub.py` — view-per-page EPUB builder with viewport, cover, rotation (Kindle path)
+- `src/build_xtc.py` — XTG/XTC format builder for XTe Ink (1-bit packed pages, native CrossPoint format)
 - `src/templates/index.html` — web UI (tabs: Convert, MangaDex, Preview)
 - `src/static/` — PWA icons (icon-192.png, icon-512.png)
 - `src/preview.py` — legacy HTML preview at device dimensions
