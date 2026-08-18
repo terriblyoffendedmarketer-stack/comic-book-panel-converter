@@ -1,18 +1,52 @@
-# split_page.py — Panel-aware page splitter with e-ink optimization
-# Splits comic pages into overlapping horizontal strips ("overlapping thirds")
-# for readable display on small e-ink screens like XTe Ink X4.
+# split_page.py — Overlapping-thirds page splitter with e-ink optimization
+# Replicates the xtcjs overlapping segments algorithm for XTe Ink X4 (480x800),
+# with an enhancement: split boundaries snap to panel gutters when detected.
 #
-# Usage: called by convert.py pipeline, not standalone
+# Usage: called by convert.py and web_app.py pipeline, not standalone
 # Requires: Pillow
 #
 # Gotchas:
-# - Naive thirds cut through panels. This uses panel coordinates from Kumiko
-#   to find gutter lines between rows and snaps split boundaries to them.
-# - For e-ink: grayscale, auto-contrast, sharpen, posterize to 16 levels.
+# - The xtcjs algorithm scales page width to 800px (XTe Ink height in landscape),
+#   then computes how many image pixels map to the 480px width. This gives the
+#   segment height. 3 segments with overlap, more only if overlap < 5%.
+# - Panel gutter snapping adjusts each segment boundary to the nearest gutter
+#   within 15% of segment height. This avoids cutting through panels.
 # - Cover pages (page 0) should NOT be split — handle in the caller.
 # - White background padding (not black) — matches comic page color on e-ink.
 
-from PIL import Image, ImageOps, ImageEnhance, ImageFilter
+from PIL import Image, ImageOps, ImageFilter
+import math
+
+
+def calculate_overlap_segments(width, height):
+    """Calculate overlapping segments for the 480x800 XTe Ink display.
+
+    Replicates xtcjs calculateOverlapSegments():
+    - scale = 800 / width (maps page width to display height in landscape)
+    - segmentHeight = floor(480 / scale) (display width mapped back to page pixels)
+    - Start with 3 segments, add more only if overlap drops below 5%
+    - Each segment shifts by 'shift' pixels; last segment extends to page bottom
+    """
+    scale = 800 / width
+    segment_height = math.floor(480 / scale)
+
+    num_segments = 3
+    shift = 0
+
+    if num_segments > 1:
+        shift = math.floor(segment_height - (segment_height * num_segments - height) / (num_segments - 1))
+
+    while shift / segment_height > 0.95 and num_segments < 10:
+        num_segments += 1
+        shift = math.floor(segment_height - (segment_height * num_segments - height) / (num_segments - 1))
+
+    segments = []
+    for i in range(num_segments):
+        y = shift * i
+        h = height - y if i == num_segments - 1 else segment_height
+        segments.append((0, y, width, h))
+
+    return segments
 
 
 def find_panel_rows(panels):
@@ -59,89 +93,77 @@ def find_gutter_centers(rows):
     return gutters
 
 
-def compute_split_points(gutters, num_splits, page_height):
-    """Compute split y-coordinates, snapping to nearest gutter when close."""
-    if num_splits <= 1:
-        return []
+def snap_segments_to_gutters(segments, gutters, page_height):
+    """Adjust segment start positions to snap to nearest panel gutters.
 
-    ideal = [(i * page_height) // num_splits for i in range(1, num_splits)]
-    threshold = page_height * 0.15
+    For each segment after the first, check if its start position (y) is
+    near a gutter. If within 15% of segment height, shift y to the gutter.
+    Segment heights are recalculated to maintain coverage of the full page.
+    """
+    if not gutters or len(segments) <= 1:
+        return segments
 
-    splits = []
+    width = segments[0][2]
+    segment_height = segments[0][3]
+    threshold = segment_height * 0.15
+    num = len(segments)
+
+    starts = [s[1] for s in segments]
+
     used_gutters = set()
-    for y in ideal:
-        best = y
+    for i in range(1, num):
         best_dist = threshold + 1
         best_gi = -1
+        best_g = starts[i]
         for gi, g in enumerate(gutters):
             if gi in used_gutters:
                 continue
-            dist = abs(g - y)
+            dist = abs(g - starts[i])
             if dist < best_dist:
-                best = g
                 best_dist = dist
                 best_gi = gi
+                best_g = g
         if best_dist <= threshold and best_gi >= 0:
             used_gutters.add(best_gi)
-        splits.append(best)
+            starts[i] = best_g
 
-    return splits
+    result = []
+    for i in range(num):
+        y = starts[i]
+        if i == num - 1:
+            h = page_height - y
+        else:
+            h = max(segment_height, starts[i + 1] + segment_height - starts[i + 1])
+            h = segment_height
+        result.append((0, y, width, h))
 
+    if result[-1][1] + result[-1][3] < page_height:
+        last = result[-1]
+        result[-1] = (0, last[1], width, page_height - last[1])
 
-def determine_splits(panels, page_width, page_height):
-    """Determine how many splits and where, based on panel layout.
-
-    Returns (num_splits, split_points).
-    Full-bleed pages get 1 split (no splitting).
-    """
-    if not panels:
-        return 3, compute_split_points([], 3, page_height)
-
-    # Full-bleed: single panel covering most of the page
-    if len(panels) == 1:
-        p = panels[0]
-        if p[2] * p[3] > page_width * page_height * 0.5:
-            return 1, []
-
-    rows = find_panel_rows(panels)
-    gutters = find_gutter_centers(rows)
-
-    num_rows = len(rows)
-    if num_rows <= 1:
-        num_splits = 1
-    elif num_rows == 2:
-        num_splits = 2
-    else:
-        num_splits = 3
-
-    split_points = compute_split_points(gutters, num_splits, page_height)
-    return num_splits, split_points
+    return result
 
 
-def split_page(img, panels, overlap_pct=0.15):
-    """Split a page into overlapping horizontal strips with panel-aware boundaries.
+def split_page(img, panels):
+    """Split a page into overlapping segments using the xtcjs algorithm.
 
+    If panel data is available, segment boundaries are snapped to gutters.
     Returns list of (x, y, w, h) crop regions.
-    overlap_pct: fraction of page height shared between adjacent strips.
     """
     w, h = img.size
 
-    num_splits, split_points = determine_splits(panels, w, h)
+    segments = calculate_overlap_segments(w, h)
 
-    if num_splits <= 1:
-        return [(0, 0, w, h)]
+    if len(segments) <= 1:
+        return segments
 
-    boundaries = [0] + split_points + [h]
-    overlap_px = int(h * overlap_pct)
-    half_overlap = overlap_px // 2
+    if panels:
+        rows = find_panel_rows(panels)
+        gutters = find_gutter_centers(rows)
+        if gutters:
+            segments = snap_segments_to_gutters(segments, gutters, h)
 
-    views = []
-    for i in range(len(boundaries) - 1):
-        y_start = max(0, boundaries[i] - half_overlap) if i > 0 else 0
-        y_end = min(h, boundaries[i + 1] + half_overlap) if i < len(boundaries) - 2 else h
-        views.append((0, y_start, w, y_end - y_start))
-
-    return views
+    return segments
 
 
 def process_for_eink(img, target_width=480, target_height=800):
