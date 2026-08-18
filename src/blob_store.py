@@ -33,11 +33,34 @@ def upload(filepath, filename):
     with open(filepath, "rb") as f:
         data = f.read()
 
+    content_type = "application/octet-stream" if filename.endswith(".xtc") else "application/epub+zip"
     resp = requests.put(
         f"{BLOB_API}/{pathname}",
         headers={
             "authorization": f"Bearer {token}",
-            "x-content-type": "application/epub+zip",
+            "x-content-type": content_type,
+            "x-add-random-suffix": "0",
+        },
+        data=data,
+        timeout=120,
+    )
+    resp.raise_for_status()
+    return resp.json()["url"]
+
+
+def upload_bytes(data, filename):
+    """Upload raw bytes to Vercel Blob. Returns blob URL."""
+    token = _token()
+    if not token:
+        raise RuntimeError("BLOB_READ_WRITE_TOKEN not set")
+
+    pathname = f"books/{filename}"
+    content_type = "application/octet-stream" if filename.endswith(".xtc") else "application/epub+zip"
+    resp = requests.put(
+        f"{BLOB_API}/{pathname}",
+        headers={
+            "authorization": f"Bearer {token}",
+            "x-content-type": content_type,
             "x-add-random-suffix": "0",
         },
         data=data,

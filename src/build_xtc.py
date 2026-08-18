@@ -143,6 +143,39 @@ def build_xtc(xtg_pages, title=None, author=None):
     return bytes(buf)
 
 
+def read_xtc_page(xtc_data, page_idx):
+    """Read a single page from XTC data and return a PIL Image.
+
+    Parses the XTC index to find the page, then decodes the XTG 1-bit data.
+    """
+    page_count = struct.unpack_from('<H', xtc_data, 6)[0]
+    if page_idx >= page_count:
+        return None
+
+    index_offset = struct.unpack_from('<Q', xtc_data, 24)[0]
+    entry_off = index_offset + page_idx * 16
+
+    page_offset = struct.unpack_from('<Q', xtc_data, entry_off)[0]
+    page_size = struct.unpack_from('<I', xtc_data, entry_off + 8)[0]
+    pg_w = struct.unpack_from('<H', xtc_data, entry_off + 12)[0]
+    pg_h = struct.unpack_from('<H', xtc_data, entry_off + 14)[0]
+
+    xtg = xtc_data[page_offset:page_offset + page_size]
+    pixel_data = xtg[22:]
+
+    row_bytes = (pg_w + 7) // 8
+    bits = np.unpackbits(np.frombuffer(pixel_data, dtype=np.uint8))
+    pixels = bits.reshape(-1, row_bytes * 8)[:pg_h, :pg_w]
+    img_array = (pixels * 255).astype(np.uint8)
+
+    return Image.fromarray(img_array, mode='L')
+
+
+def read_xtc_page_count(xtc_data):
+    """Return the number of pages in an XTC file."""
+    return struct.unpack_from('<H', xtc_data, 6)[0]
+
+
 def convert_views_to_xtc(views_dir, title=None, output_path=None):
     """Convert a directory of view images to XTC format.
 

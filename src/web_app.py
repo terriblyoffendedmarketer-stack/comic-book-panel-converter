@@ -874,39 +874,64 @@ def preview_list():
     return jsonify(epubs)
 
 
-@app.route('/preview/pages/<path:epub_path>')
-def preview_pages(epub_path):
-    """Extract and serve page list from an EPUB."""
-    import zipfile
-    full_path = OUTPUT_DIR / epub_path
+@app.route('/preview/pages/<path:file_path>')
+def preview_pages(file_path):
+    """Extract and serve page list from an EPUB or XTC."""
+    full_path = OUTPUT_DIR / file_path
     if not full_path.exists():
-        return jsonify({'error': 'EPUB not found'}), 404
+        return jsonify({'error': 'File not found'}), 404
 
     pages = []
-    with zipfile.ZipFile(full_path, 'r') as zf:
-        image_files = sorted([
-            n for n in zf.namelist()
-            if n.lower().endswith(('.jpg', '.jpeg', '.png'))
-            and not n.startswith('__MACOSX')
-        ])
-        for i, name in enumerate(image_files):
+    if full_path.suffix.lower() == '.xtc':
+        from build_xtc import read_xtc_page_count
+        xtc_data = full_path.read_bytes()
+        count = read_xtc_page_count(xtc_data)
+        for i in range(count):
             pages.append({
                 'index': i,
-                'name': name,
-                'url': f'/preview/image/{epub_path}/{i}',
+                'name': f'page_{i:04d}',
+                'url': f'/preview/image/{file_path}/{i}',
             })
+    else:
+        import zipfile
+        with zipfile.ZipFile(full_path, 'r') as zf:
+            image_files = sorted([
+                n for n in zf.namelist()
+                if n.lower().endswith(('.jpg', '.jpeg', '.png'))
+                and not n.startswith('__MACOSX')
+            ])
+            for i, name in enumerate(image_files):
+                pages.append({
+                    'index': i,
+                    'name': name,
+                    'url': f'/preview/image/{file_path}/{i}',
+                })
     return jsonify(pages)
 
 
-@app.route('/preview/image/<path:epub_path>/<int:page_idx>')
-def preview_image(epub_path, page_idx):
-    """Serve a single page image from an EPUB."""
-    import zipfile
+@app.route('/preview/image/<path:file_path>/<int:page_idx>')
+def preview_image(file_path, page_idx):
+    """Serve a single page image from an EPUB or XTC."""
     import io
-    full_path = OUTPUT_DIR / epub_path
+    full_path = OUTPUT_DIR / file_path
     if not full_path.exists():
-        return "EPUB not found", 404
+        return "File not found", 404
 
+    if full_path.suffix.lower() == '.xtc':
+        from build_xtc import read_xtc_page, read_xtc_page_count
+        xtc_data = full_path.read_bytes()
+        if page_idx >= read_xtc_page_count(xtc_data):
+            return "Page not found", 404
+        img = read_xtc_page(xtc_data, page_idx)
+        if img is None:
+            return "Page decode failed", 500
+        buf = io.BytesIO()
+        img.save(buf, format='PNG')
+        buf.seek(0)
+        from flask import Response
+        return Response(buf.read(), mimetype='image/png')
+
+    import zipfile
     with zipfile.ZipFile(full_path, 'r') as zf:
         image_files = sorted([
             n for n in zf.namelist()
@@ -1071,6 +1096,26 @@ def device_send():
 
     try:
         url = blob_store.upload(str(filepath), filename)
+        return jsonify({'ok': True, 'url': url})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/device/upload', methods=['POST'])
+def device_upload():
+    """Upload a file directly from the user's computer to Vercel Blob."""
+    if not blob_store.is_configured():
+        return jsonify({'error': 'Blob storage not configured. Set BLOB_READ_WRITE_TOKEN.'}), 503
+
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file provided'}), 400
+
+    f = request.files['file']
+    if not f.filename:
+        return jsonify({'error': 'No filename'}), 400
+
+    try:
+        url = blob_store.upload_bytes(f.read(), f.filename)
         return jsonify({'ok': True, 'url': url})
     except Exception as e:
         return jsonify({'error': str(e)}), 500

@@ -444,7 +444,7 @@
     </button>
   </div>
 
-  <h2>Select EPUB</h2>
+  <h2>Select file</h2>
   <div class="preview-select">
     <select id="previewSelect">
       <option value="">Loading...</option>
@@ -453,8 +453,8 @@
 
   <div class="preview-upload">
     <label>
-      Or upload an EPUB
-      <input type="file" id="previewFileInput" accept=".epub" style="display:none">
+      Or upload a file
+      <input type="file" id="previewFileInput" accept=".epub,.xtc" style="display:none">
     </label>
   </div>
 
@@ -483,7 +483,16 @@
   </div>
 
   <div id="deviceConfigured" style="display:none">
-    <h2>Converted EPUBs</h2>
+    <h2>Upload to catalog</h2>
+    <div style="margin-bottom:16px">
+      <label style="display:inline-block; padding:10px 20px; border:2px dashed var(--border); border-radius:8px; cursor:pointer; font-size:13px; color:var(--accent); text-align:center;">
+        Choose file to upload (.epub / .xtc)
+        <input type="file" id="deviceFileInput" accept=".epub,.xtc" style="display:none">
+      </label>
+      <span id="deviceUploadStatus" style="margin-left:10px; font-size:13px; color:var(--muted)"></span>
+    </div>
+
+    <h2>Send from server</h2>
     <div id="deviceLocalList" style="margin-bottom:16px">
       <div style="color:var(--muted); font-size:13px">Loading...</div>
     </div>
@@ -1037,7 +1046,7 @@ async function loadPreviewList() {
   try {
     const res = await fetch('/preview/list');
     const epubs = await res.json();
-    select.innerHTML = '<option value="">Choose an EPUB...</option>';
+    select.innerHTML = '<option value="">Choose a file...</option>';
     epubs.forEach(e => {
       const opt = document.createElement('option');
       opt.value = e.path;
@@ -1355,6 +1364,33 @@ function loadDeviceCatalog(books) {
     container.appendChild(row);
   });
 }
+
+// Device file upload
+document.getElementById('deviceFileInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const status = document.getElementById('deviceUploadStatus');
+  status.textContent = `Uploading ${file.name}...`;
+  status.style.color = 'var(--accent)';
+  try {
+    const form = new FormData();
+    form.append('file', file);
+    const res = await fetch('/device/upload', { method: 'POST', body: form });
+    const data = await res.json();
+    if (data.ok) {
+      status.textContent = 'Uploaded!';
+      status.style.color = 'var(--success-border)';
+      loadDeviceTab();
+    } else {
+      status.textContent = data.error || 'Upload failed';
+      status.style.color = 'var(--danger)';
+    }
+  } catch(err) {
+    status.textContent = 'Upload failed';
+    status.style.color = 'var(--danger)';
+  }
+  e.target.value = '';
+});
 
 // Init
 loadExistingFiles();
