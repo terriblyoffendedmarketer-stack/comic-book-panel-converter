@@ -25,26 +25,25 @@ Converts comic book files (CBZ/CBR/CB7) into e-reader optimized EPUBs for Kindle
 5. [x] CLI device selection (`--device kindle|xteink`)
 6. [x] Cover image support (OPF metadata + cover.xhtml, never split)
 7. [x] Web UI — Flask app with drag-drop upload, device checkboxes, progress, download links
-8. [x] Panel-aware overlapping thirds — splits at gutters, not through panels
-9. [x] E-ink dithering — grayscale, auto-contrast, sharpen for XTe Ink
+8. [x] Overlapping thirds (xtcjs algorithm) — segments rotated to landscape, gutter-snapped
+9. [x] E-ink optimization — Floyd-Steinberg dithering, autocontrast, sharpen
 10. [x] MangaDex download — search, volume selection, auto-convert pipeline
 11. [x] EPUB previewer — exact device viewport with page navigation
 12. [x] Auto-start (launchd) — always available at localhost:8080
 13. [x] PWA manifest — installable as app from browser
-14. [~] Cloud deployment (Fly.io) — Dockerfile + fly.toml ready, needs `fly deploy`
-15. [ ] Landscape-first mode — auto-detect dominant orientation
+14. [x] Cloud deployment (Fly.io) — live at comic-converter.fly.dev
+15. [x] Landscape-first mode — segments rotated 90° for landscape reading (xtcjs default)
 16. [ ] PDF input support
 17. [ ] Mihon chapter combining — merge downloaded chapter CBZs into volumes
 
-## Panel-Aware Overlapping Thirds (split_page.py)
+## Overlapping Thirds — xtcjs Algorithm (split_page.py)
 
-Snaps split boundaries to panel gutters — never cuts through artwork:
+Replicates the [xtcjs](https://github.com/varo6/xtcjs) `calculateOverlapSegments()` with gutter snapping:
 
-1. **`find_panel_rows()`** — Groups detected panels into horizontal rows (>40% vertical overlap).
-2. **`find_gutter_centers()`** — Finds y-coordinates of gutters between panel rows.
-3. **`compute_split_points()`** — Calculates ideal split points, snaps each to nearest gutter within 15% of page height.
-4. **`determine_splits()`** — Full-bleed → 1 view. 2 rows → 2 strips. 3+ rows → 3 strips.
-5. **`process_for_eink()`** — Grayscale, auto-contrast, sharpen, resize to 480x800, white-padded.
+1. **`calculate_overlap_segments(w, h)`** — xtcjs math: `scale = 800/w`, `segmentHeight = floor(480/scale)`, 3 overlapping segments (more only if overlap < 5%).
+2. **`snap_segments_to_gutters()`** — Adjusts segment start positions to nearest panel gutter within 15% of segment height.
+3. **`process_for_eink()`** — Rotate 90° (landscape), grayscale, autocontrast, sharpen, resize to 480x800, Floyd-Steinberg dither.
+4. Panel detection (`find_panel_rows`, `find_gutter_centers`) only used for snapping; skipped for manga.
 
 ## Manga Sources
 
@@ -123,6 +122,7 @@ Three download sources available via the Download tab:
 - `Procfile` — gunicorn process definition
 - `wsgi.py` — WSGI entry point for gunicorn
 - `.dockerignore` — excludes venv, input, output from builds
+- `reference/xtcjs/` — xtcjs source reference (image.ts, dithering.ts, canvas.ts, converter.ts, README.md)
 
 ## Target Devices
 
