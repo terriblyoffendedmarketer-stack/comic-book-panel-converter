@@ -16,7 +16,6 @@
 
 from PIL import Image, ImageOps, ImageFilter
 import math
-import numpy as np
 
 
 def calculate_overlap_segments(width, height):
@@ -168,43 +167,12 @@ def split_page(img, panels):
 
 
 def floyd_steinberg_dither(img):
-    """Floyd-Steinberg dithering with serpentine scanning and error clamping.
+    """Floyd-Steinberg dithering using Pillow's native C implementation.
 
-    Replicates xtcjs dithering pipeline: unsharp mask → serpentine error
-    diffusion with clamped error (±96) to prevent streak artifacts.
+    Pillow's convert('1') uses Floyd-Steinberg internally, implemented in C —
+    ~100x faster than a pure Python pixel loop.
     """
-    pixels = np.array(img, dtype=np.float32)
-    h, w = pixels.shape
-
-    ERROR_CLAMP = 96.0
-
-    for y in range(h):
-        reverse = (y & 1) == 1
-        x_range = range(w - 1, -1, -1) if reverse else range(w)
-        d = -1 if reverse else 1
-
-        for x in x_range:
-            old = pixels[y, x]
-            new = 255.0 if old >= 128 else 0.0
-            pixels[y, x] = new
-            err = old - new
-            if err > ERROR_CLAMP:
-                err = ERROR_CLAMP
-            elif err < -ERROR_CLAMP:
-                err = -ERROR_CLAMP
-
-            xa = x + d
-            xb = x - d
-            if 0 <= xa < w:
-                pixels[y, xa] += err * 7 / 16
-            if y + 1 < h:
-                if 0 <= xb < w:
-                    pixels[y + 1, xb] += err * 3 / 16
-                pixels[y + 1, x] += err * 5 / 16
-                if 0 <= xa < w:
-                    pixels[y + 1, xa] += err * 1 / 16
-
-    return Image.fromarray(np.clip(pixels, 0, 255).astype(np.uint8), mode='L')
+    return img.convert('1').convert('L')
 
 
 def process_for_eink(img, target_width=480, target_height=800):

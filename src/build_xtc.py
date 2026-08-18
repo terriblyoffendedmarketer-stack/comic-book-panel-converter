@@ -28,17 +28,14 @@ def image_to_xtg(img):
     w, h = img.size
     pixels = np.array(img, dtype=np.uint8)
 
+    bits = (pixels >= 128).astype(np.uint8)
     row_bytes = (w + 7) // 8
-    pixel_data = bytearray(row_bytes * h)
+    pad = row_bytes * 8 - w
+    if pad > 0:
+        bits = np.pad(bits, ((0, 0), (0, pad)), constant_values=0)
+    pixel_data = np.packbits(bits, axis=1).tobytes()
 
-    for y in range(h):
-        for x in range(w):
-            if pixels[y, x] >= 128:
-                byte_idx = y * row_bytes + x // 8
-                bit_idx = 7 - (x % 8)
-                pixel_data[byte_idx] |= 1 << bit_idx
-
-    digest = bytes(pixel_data[:8]) if len(pixel_data) >= 8 else pixel_data + b'\x00' * (8 - len(pixel_data))
+    digest = pixel_data[:8] if len(pixel_data) >= 8 else pixel_data + b'\x00' * (8 - len(pixel_data))
 
     header = bytearray(22)
     header[0:3] = b'XTG'
@@ -50,7 +47,7 @@ def image_to_xtg(img):
     struct.pack_into('<I', header, 10, len(pixel_data))
     header[14:22] = digest[:8]
 
-    return bytes(header) + bytes(pixel_data)
+    return bytes(header) + pixel_data
 
 
 def build_xtc(xtg_pages, title=None, author=None):
