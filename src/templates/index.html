@@ -343,6 +343,12 @@
   <div id="xteinkOptions" style="margin-top:6px; padding:8px 12px; background:var(--card); border:1px solid var(--border); border-radius:6px; font-size:13px;">
     <label style="margin-right:16px"><input type="checkbox" id="optContinuous"> Continuous scroll (uniform overlap across pages)</label>
     <label><input type="checkbox" id="optRotateCw"> Flip landscape direction</label>
+    <div style="margin-top:6px">
+      <span style="color:var(--muted); margin-right:8px">Dithering:</span>
+      <label style="margin-right:12px"><input type="radio" name="dither" value="floyd" checked> Floyd-Steinberg</label>
+      <label style="margin-right:12px"><input type="radio" name="dither" value="sierra-lite"> Sierra Lite</label>
+      <label><input type="radio" name="dither" value="atkinson"> Atkinson</label>
+    </div>
   </div>
 
   <div class="existing-files">
@@ -788,7 +794,7 @@ convertBtn.addEventListener('click', async () => {
       const res = await fetch('/convert', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filename, devices, continuous: document.getElementById('optContinuous').checked, rotate_cw: document.getElementById('optRotateCw').checked })
+        body: JSON.stringify({ filename, devices, continuous: document.getElementById('optContinuous').checked, rotate_cw: document.getElementById('optRotateCw').checked, dither: document.querySelector('input[name="dither"]:checked').value })
       });
       const { job_id, error } = await res.json();
       if (error) { addLogEntry(progressLog, error); continue; }
@@ -1058,6 +1064,7 @@ document.getElementById('mdDownloadBtn').addEventListener('click', async () => {
       devices: devices,
       continuous: document.getElementById('optContinuous').checked,
       rotate_cw: document.getElementById('optRotateCw').checked,
+      dither: document.querySelector('input[name="dither"]:checked').value,
     };
     if (source !== 'mangadex') payload.source = source;
 

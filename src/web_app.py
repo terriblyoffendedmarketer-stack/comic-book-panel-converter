@@ -113,7 +113,7 @@ def detect_panels_parallel(pages, manga):
     return all_panels
 
 
-def convert_xteink_thirds(comic_path, manga, title, progress, is_cancelled=None, continuous=False, rotate_cw=False):
+def convert_xteink_thirds(comic_path, manga, title, progress, is_cancelled=None, continuous=False, rotate_cw=False, dither_algo='floyd'):
     """Convert for XTe Ink using overlapping thirds + XTC native format."""
     device = DEVICE_PROFILES['xteink']
     tw, th = device['width'], device['height']
@@ -138,7 +138,7 @@ def convert_xteink_thirds(comic_path, manga, title, progress, is_cancelled=None,
         xtg_pages = []
 
         cover_img = Image.open(pages[0])
-        cover = process_cover(cover_img, target_w=tw, target_h=th)
+        cover = process_cover(cover_img, dither_algo=dither_algo, target_w=tw, target_h=th)
         xtg_pages.append(image_to_xtg(cover))
 
         content_pages = pages[1:]
@@ -176,7 +176,7 @@ def convert_xteink_thirds(comic_path, manga, title, progress, is_cancelled=None,
                     composite.paste(img2.crop((0, 0, w, h2)), (0, h1))
                     img = composite
 
-                processed = process_page(img, rotate_cw=rotate_cw, target_w=tw, target_h=th)
+                processed = process_page(img, rotate_cw=rotate_cw, dither_algo=dither_algo, target_w=tw, target_h=th)
                 xtg_pages.append(image_to_xtg(processed))
         else:
             skip_detection = manga or total_pages > 100
@@ -197,7 +197,7 @@ def convert_xteink_thirds(comic_path, manga, title, progress, is_cancelled=None,
 
                 for rx, ry, rw, rh in regions:
                     crop = img.crop((rx, ry, rx + rw, ry + rh))
-                    processed = process_page(crop, rotate_cw=rotate_cw, target_w=tw, target_h=th)
+                    processed = process_page(crop, rotate_cw=rotate_cw, dither_algo=dither_algo, target_w=tw, target_h=th)
                     xtg_pages.append(image_to_xtg(processed))
 
         progress("Building XTC...")
@@ -249,7 +249,7 @@ def convert_kindle(comic_path, manga, title, progress):
         return None
 
 
-def run_conversion(job_id, filepath, devices, continuous=False, rotate_cw=False):
+def run_conversion(job_id, filepath, devices, continuous=False, rotate_cw=False, dither_algo='floyd'):
     """Run conversion in background thread."""
     job = jobs[job_id]
 
@@ -273,7 +273,7 @@ def run_conversion(job_id, filepath, devices, continuous=False, rotate_cw=False)
             return
 
         if 'xteink' in devices:
-            path = convert_xteink_thirds(comic_path, manga, title, progress, is_cancelled, continuous=continuous, rotate_cw=rotate_cw)
+            path = convert_xteink_thirds(comic_path, manga, title, progress, is_cancelled, continuous=continuous, rotate_cw=rotate_cw, dither_algo=dither_algo)
             if is_cancelled():
                 return
             if path:
@@ -308,7 +308,7 @@ def run_conversion(job_id, filepath, devices, continuous=False, rotate_cw=False)
             progress(f"Error: {e}")
 
 
-def run_mangadex_download(job_id, manga_id, manga_title, volume_nums, auto_convert, devices, continuous=False, rotate_cw=False):
+def run_mangadex_download(job_id, manga_id, manga_title, volume_nums, auto_convert, devices, continuous=False, rotate_cw=False, dither_algo='floyd'):
     """Download manga volumes from MangaDex in background thread."""
     job = jobs[job_id]
 
@@ -350,7 +350,7 @@ def run_mangadex_download(job_id, manga_id, manga_title, volume_nums, auto_conve
                 progress(f"Converting {title} ({'Manga' if manga else 'Western'})...")
 
                 if 'xteink' in devices:
-                    path = convert_xteink_thirds(cbz_path, manga, title, progress, continuous=continuous, rotate_cw=rotate_cw)
+                    path = convert_xteink_thirds(cbz_path, manga, title, progress, continuous=continuous, rotate_cw=rotate_cw, dither_algo=dither_algo)
                     if path:
                         results.append({
                             'device': 'XTe Ink X4',
@@ -474,6 +474,7 @@ def start_convert():
     devices = data.get('devices', ['xteink'])
     continuous = data.get('continuous', False)
     rotate_cw = data.get('rotate_cw', False)
+    dither_algo = data.get('dither', 'floyd')
 
     if not filename:
         return jsonify({'error': 'No file specified'}), 400
@@ -498,7 +499,7 @@ def start_convert():
         'filename': filename,
     }
 
-    thread = threading.Thread(target=run_conversion, args=(job_id, filepath, devices, continuous, rotate_cw))
+    thread = threading.Thread(target=run_conversion, args=(job_id, filepath, devices, continuous, rotate_cw, dither_algo))
     thread.daemon = True
     thread.start()
 
@@ -668,6 +669,7 @@ def mangadex_download():
     devices = data.get('devices', ['xteink'])
     continuous = data.get('continuous', False)
     rotate_cw = data.get('rotate_cw', False)
+    dither_algo = data.get('dither', 'floyd')
 
     if not manga_id or not volume_nums:
         return jsonify({'error': 'Missing manga_id or volumes'}), 400
@@ -682,7 +684,7 @@ def mangadex_download():
 
     thread = threading.Thread(
         target=run_mangadex_download,
-        args=(job_id, manga_id, manga_title, volume_nums, auto_convert, devices, continuous, rotate_cw)
+        args=(job_id, manga_id, manga_title, volume_nums, auto_convert, devices, continuous, rotate_cw, dither_algo)
     )
     thread.daemon = True
     thread.start()
@@ -768,6 +770,7 @@ def source_download():
     devices = data.get('devices', ['xteink'])
     continuous = data.get('continuous', False)
     rotate_cw = data.get('rotate_cw', False)
+    dither_algo = data.get('dither', 'floyd')
 
     if not volume_nums:
         return jsonify({'error': 'No volumes selected'}), 400
@@ -782,7 +785,7 @@ def source_download():
 
     thread = threading.Thread(
         target=run_source_download,
-        args=(job_id, source, manga_id, manga_slug, manga_title, volume_nums, auto_convert, devices, continuous, rotate_cw)
+        args=(job_id, source, manga_id, manga_slug, manga_title, volume_nums, auto_convert, devices, continuous, rotate_cw, dither_algo)
     )
     thread.daemon = True
     thread.start()
@@ -790,7 +793,7 @@ def source_download():
     return jsonify({'job_id': job_id})
 
 
-def run_source_download(job_id, source, manga_id, manga_slug, manga_title, volume_nums, auto_convert, devices, continuous=False, rotate_cw=False):
+def run_source_download(job_id, source, manga_id, manga_slug, manga_title, volume_nums, auto_convert, devices, continuous=False, rotate_cw=False, dither_algo='floyd'):
     job = jobs[job_id]
 
     def progress(msg):
@@ -855,7 +858,7 @@ def run_source_download(job_id, source, manga_id, manga_slug, manga_title, volum
                 progress(f"Converting {title} ({'Manga' if manga else 'Western'})...")
 
                 if 'xteink' in devices:
-                    path = convert_xteink_thirds(cbz_path, manga, title, progress, continuous=continuous, rotate_cw=rotate_cw)
+                    path = convert_xteink_thirds(cbz_path, manga, title, progress, continuous=continuous, rotate_cw=rotate_cw, dither_algo=dither_algo)
                     if path:
                         results.append({
                             'device': 'XTe Ink X4',
