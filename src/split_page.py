@@ -147,10 +147,14 @@ def snap_segments_to_gutters(segments, gutters, page_height):
 def split_page(img, panels):
     """Split a page into overlapping segments using the xtcjs algorithm.
 
+    Landscape pages (double-page spreads) are never split — shown as one view.
     If panel data is available, segment boundaries are snapped to gutters.
     Returns list of (x, y, w, h) crop regions.
     """
     w, h = img.size
+
+    if w > h:
+        return [(0, 0, w, h)]
 
     segments = calculate_overlap_segments(w, h)
 
@@ -169,53 +173,78 @@ def split_page(img, panels):
 def calculate_continuous_segments(page_widths_heights):
     """Calculate overlapping segments across all pages as one continuous strip.
 
-    Returns list of (page_idx, y_in_page, height) for each segment.
-    Segments that span two pages return (page_idx, y_in_page, height, next_page_idx, next_y_height).
+    Landscape pages (w > h) are inserted as standalone full-page views, not segmented.
+    Portrait pages are grouped into runs and segmented continuously with uniform overlap.
+
+    Returns list of tuples:
+      (page_idx, y_in_page, height) — single-page segment
+      (page_idx, y_in_page, height, next_page_idx, next_y_height) — cross-page segment
+      ('landscape', page_idx) — full landscape page, no split
     """
     if not page_widths_heights:
         return []
 
-    width = page_widths_heights[0][0]
-    heights = [h for _, h in page_widths_heights]
-    total_height = sum(heights)
+    results = []
+    portrait_run = []
 
-    cumulative = [0]
-    for h in heights:
-        cumulative.append(cumulative[-1] + h)
+    def flush_portrait_run():
+        if not portrait_run:
+            return
+        width = portrait_run[0][1]
+        run_heights = [h for _, _, h in portrait_run]
+        total_height = sum(run_heights)
 
-    scale = 800 / width
-    segment_height = math.floor(480 / scale)
+        cumulative = [0]
+        for h in run_heights:
+            cumulative.append(cumulative[-1] + h)
 
-    num_segments = 3
-    shift = math.floor(segment_height - (segment_height * num_segments - total_height) / (num_segments - 1))
-    while shift / segment_height > 0.95 and num_segments < len(heights) * 5:
-        num_segments += 1
-        shift = math.floor(segment_height - (segment_height * num_segments - total_height) / (num_segments - 1))
+        scale = 800 / width
+        segment_height = math.floor(480 / scale)
 
-    segments = []
-    for i in range(num_segments):
-        y = shift * i
-        h = total_height - y if i == num_segments - 1 else segment_height
-
-        page_idx = 0
-        for pi in range(len(heights)):
-            if cumulative[pi + 1] > y:
-                page_idx = pi
-                break
-
-        y_in_page = y - cumulative[page_idx]
-        remaining_in_page = heights[page_idx] - y_in_page
-
-        if remaining_in_page >= h:
-            segments.append((page_idx, y_in_page, h))
+        num_segments = 3
+        if num_segments > 1:
+            shift = math.floor(segment_height - (segment_height * num_segments - total_height) / (num_segments - 1))
         else:
-            next_page = page_idx + 1
-            if next_page < len(heights):
-                segments.append((page_idx, y_in_page, remaining_in_page, next_page, h - remaining_in_page))
-            else:
-                segments.append((page_idx, y_in_page, remaining_in_page))
+            shift = 0
 
-    return segments
+        while shift / segment_height > 0.95 and num_segments < len(run_heights) * 5:
+            num_segments += 1
+            shift = math.floor(segment_height - (segment_height * num_segments - total_height) / (num_segments - 1))
+
+        for i in range(num_segments):
+            y = shift * i
+            h = total_height - y if i == num_segments - 1 else segment_height
+
+            run_idx = 0
+            for ri in range(len(run_heights)):
+                if cumulative[ri + 1] > y:
+                    run_idx = ri
+                    break
+
+            real_page_idx = portrait_run[run_idx][0]
+            y_in_page = y - cumulative[run_idx]
+            remaining_in_page = run_heights[run_idx] - y_in_page
+
+            if remaining_in_page >= h:
+                results.append((real_page_idx, y_in_page, h))
+            else:
+                next_run_idx = run_idx + 1
+                if next_run_idx < len(portrait_run):
+                    next_page_idx = portrait_run[next_run_idx][0]
+                    results.append((real_page_idx, y_in_page, remaining_in_page, next_page_idx, h - remaining_in_page))
+                else:
+                    results.append((real_page_idx, y_in_page, remaining_in_page))
+
+    for page_idx, (w, h) in enumerate(page_widths_heights):
+        if w > h:
+            flush_portrait_run()
+            portrait_run = []
+            results.append(('landscape', page_idx))
+        else:
+            portrait_run.append((page_idx, w, h))
+
+    flush_portrait_run()
+    return results
 
 
 def floyd_steinberg_dither(img):

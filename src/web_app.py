@@ -161,13 +161,15 @@ def convert_xteink_thirds(comic_path, manga, title, progress, is_cancelled=None,
                 if si % 50 == 0:
                     progress(f"Processing segment {si + 1} of {len(segments)}...")
 
-                if len(seg) == 3:
-                    # Single page segment
+                if seg[0] == 'landscape':
+                    img = page_images[seg[1]]
+                    processed = process_for_eink(img, device['width'], device['height'], rotate_cw=rotate_cw)
+                elif len(seg) == 3:
                     pi, y, h = seg
                     img = page_images[pi]
                     crop = img.crop((0, y, img.width, y + h))
+                    processed = process_for_eink(crop, device['width'], device['height'], rotate_cw=rotate_cw)
                 else:
-                    # Cross-page segment
                     pi, y, h1, pi2, h2 = seg
                     img1 = page_images[pi]
                     img2 = page_images[pi2]
@@ -176,9 +178,8 @@ def convert_xteink_thirds(comic_path, manga, title, progress, is_cancelled=None,
                     composite = Image.new('L' if img1.mode == 'L' else 'RGB', (w, total_h))
                     composite.paste(img1.crop((0, y, w, y + h1)), (0, 0))
                     composite.paste(img2.crop((0, 0, w, h2)), (0, h1))
-                    crop = composite
+                    processed = process_for_eink(composite, device['width'], device['height'], rotate_cw=rotate_cw)
 
-                processed = process_for_eink(crop, device['width'], device['height'], rotate_cw=rotate_cw)
                 xtg_pages.append(image_to_xtg(processed))
         else:
             # Per-page mode (original behavior)
