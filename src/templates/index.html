@@ -340,6 +340,10 @@
     <label><input type="checkbox" id="devXteink" checked> XTe Ink X4</label>
     <label><input type="checkbox" id="devKindle"> Kindle Paperwhite</label>
   </div>
+  <div id="xteinkOptions" style="margin-top:6px; padding:8px 12px; background:var(--card); border:1px solid var(--border); border-radius:6px; font-size:13px;">
+    <label style="margin-right:16px"><input type="checkbox" id="optContinuous"> Continuous scroll (uniform overlap across pages)</label>
+    <label><input type="checkbox" id="optRotateCw"> Flip landscape direction</label>
+  </div>
 
   <div class="existing-files">
     <div class="select-bar">
@@ -687,7 +691,10 @@ function updateConvertBtn() {
     : 'Convert';
 }
 
-document.getElementById('devXteink').addEventListener('change', updateConvertBtn);
+document.getElementById('devXteink').addEventListener('change', () => {
+  updateConvertBtn();
+  document.getElementById('xteinkOptions').style.display = document.getElementById('devXteink').checked ? 'block' : 'none';
+});
 document.getElementById('devKindle').addEventListener('change', updateConvertBtn);
 document.getElementById('selectAll').addEventListener('click', () => setAllConvertFiles(true));
 document.getElementById('selectNone').addEventListener('click', () => setAllConvertFiles(false));
@@ -731,7 +738,7 @@ convertBtn.addEventListener('click', async () => {
       const res = await fetch('/convert', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filename, devices })
+        body: JSON.stringify({ filename, devices, continuous: document.getElementById('optContinuous').checked, rotate_cw: document.getElementById('optRotateCw').checked })
       });
       const { job_id, error } = await res.json();
       if (error) { addLogEntry(progressLog, error); continue; }
@@ -999,6 +1006,8 @@ document.getElementById('mdDownloadBtn').addEventListener('click', async () => {
       volumes: [...selectedVolumes],
       auto_convert: autoConvert,
       devices: devices,
+      continuous: document.getElementById('optContinuous').checked,
+      rotate_cw: document.getElementById('optRotateCw').checked,
     };
     if (source !== 'mangadex') payload.source = source;
 

@@ -166,6 +166,58 @@ def split_page(img, panels):
     return segments
 
 
+def calculate_continuous_segments(page_widths_heights):
+    """Calculate overlapping segments across all pages as one continuous strip.
+
+    Returns list of (page_idx, y_in_page, height) for each segment.
+    Segments that span two pages return (page_idx, y_in_page, height, next_page_idx, next_y_height).
+    """
+    if not page_widths_heights:
+        return []
+
+    width = page_widths_heights[0][0]
+    heights = [h for _, h in page_widths_heights]
+    total_height = sum(heights)
+
+    cumulative = [0]
+    for h in heights:
+        cumulative.append(cumulative[-1] + h)
+
+    scale = 800 / width
+    segment_height = math.floor(480 / scale)
+
+    num_segments = 3
+    shift = math.floor(segment_height - (segment_height * num_segments - total_height) / (num_segments - 1))
+    while shift / segment_height > 0.95 and num_segments < len(heights) * 5:
+        num_segments += 1
+        shift = math.floor(segment_height - (segment_height * num_segments - total_height) / (num_segments - 1))
+
+    segments = []
+    for i in range(num_segments):
+        y = shift * i
+        h = total_height - y if i == num_segments - 1 else segment_height
+
+        page_idx = 0
+        for pi in range(len(heights)):
+            if cumulative[pi + 1] > y:
+                page_idx = pi
+                break
+
+        y_in_page = y - cumulative[page_idx]
+        remaining_in_page = heights[page_idx] - y_in_page
+
+        if remaining_in_page >= h:
+            segments.append((page_idx, y_in_page, h))
+        else:
+            next_page = page_idx + 1
+            if next_page < len(heights):
+                segments.append((page_idx, y_in_page, remaining_in_page, next_page, h - remaining_in_page))
+            else:
+                segments.append((page_idx, y_in_page, remaining_in_page))
+
+    return segments
+
+
 def floyd_steinberg_dither(img):
     """Floyd-Steinberg dithering using Pillow's native C implementation.
 
@@ -175,12 +227,13 @@ def floyd_steinberg_dither(img):
     return img.convert('1').convert('L')
 
 
-def process_for_eink(img, target_width=480, target_height=800):
+def process_for_eink(img, target_width=480, target_height=800, rotate_cw=False):
     """Optimize segment for e-ink following xtcjs pipeline order:
     grayscale → contrast → rotate → resize → sharpen → dither.
 
     Sharpen AFTER resize so downscaling doesn't blur it away.
     Contrast cutoff matches xtcjs defaults (3% black, 12% white).
+    rotate_cw: if True, rotate clockwise (ROTATE_270) instead of CCW (ROTATE_90).
     """
     if img.mode != 'L':
         img = img.convert('L')
@@ -188,7 +241,7 @@ def process_for_eink(img, target_width=480, target_height=800):
     img = ImageOps.autocontrast(img, cutoff=(3, 12))
 
     if img.width > img.height:
-        img = img.transpose(Image.ROTATE_90)
+        img = img.transpose(Image.ROTATE_270 if rotate_cw else Image.ROTATE_90)
 
     img.thumbnail((target_width, target_height), Image.LANCZOS)
 

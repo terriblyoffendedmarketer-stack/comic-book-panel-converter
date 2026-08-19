@@ -29,7 +29,7 @@ sys.path.insert(0, str(ROOT / 'src'))
 
 from extract import extract, detect_reading_direction
 from detect_panels import detect_panels
-from split_page import split_page, process_for_eink, process_cover_for_eink
+from split_page import split_page, process_for_eink, process_cover_for_eink, calculate_continuous_segments
 from build_epub import build_epub
 from build_xtc import image_to_xtg, build_xtc
 from mangadex import search_manga, get_volumes, download_volume_as_cbz
@@ -112,7 +112,7 @@ def detect_panels_parallel(pages, manga):
     return all_panels
 
 
-def convert_xteink_thirds(comic_path, manga, title, progress, is_cancelled=None):
+def convert_xteink_thirds(comic_path, manga, title, progress, is_cancelled=None, continuous=False, rotate_cw=False):
     """Convert for XTe Ink using overlapping thirds + XTC native format."""
     device = DEVICE_PROFILES['xteink']
     out_dir = OUTPUT_DIR / device['folder']
@@ -135,35 +135,76 @@ def convert_xteink_thirds(comic_path, manga, title, progress, is_cancelled=None)
         total_pages = len(pages)
         xtg_pages = []
 
-        skip_detection = manga or total_pages > 100
-        panel_cache = {}
-        if not skip_detection:
-            progress(f"Detecting panels ({total_pages} pages, {NUM_WORKERS} workers)...")
-            pages_to_detect = pages[1:]
-            panel_cache = detect_panels_parallel(pages_to_detect, manga)
+        # Cover page — always first, never split
+        cover_img = Image.open(pages[0])
+        cover = process_cover_for_eink(cover_img, device['width'], device['height'])
+        xtg_pages.append(image_to_xtg(cover))
 
-        for page_idx, page_path in enumerate(pages):
-            if is_cancelled and is_cancelled():
-                return None
+        content_pages = pages[1:]
 
-            progress(f"Processing page {page_idx + 1} of {total_pages}...")
-            img = Image.open(page_path)
+        if continuous and content_pages:
+            # Continuous overlap mode: treat all pages as one vertical strip
+            progress("Loading pages for continuous layout...")
+            page_images = []
+            for p in content_pages:
+                if is_cancelled and is_cancelled():
+                    return None
+                page_images.append(Image.open(p))
 
-            if page_idx == 0:
-                cover = process_cover_for_eink(img, device['width'], device['height'])
-                xtg_pages.append(image_to_xtg(cover))
-                continue
+            dims = [(img.width, img.height) for img in page_images]
+            segments = calculate_continuous_segments(dims)
+            progress(f"Generating {len(segments)} continuous segments...")
 
-            if skip_detection:
-                regions = split_page(img, [])
-            else:
-                panels = panel_cache.get(str(page_path), detect_panels(page_path, manga=manga))
-                regions = split_page(img, panels)
+            for si, seg in enumerate(segments):
+                if is_cancelled and is_cancelled():
+                    return None
+                if si % 50 == 0:
+                    progress(f"Processing segment {si + 1} of {len(segments)}...")
 
-            for ri, (rx, ry, rw, rh) in enumerate(regions):
-                crop = img.crop((rx, ry, rx + rw, ry + rh))
-                processed = process_for_eink(crop, device['width'], device['height'])
+                if len(seg) == 3:
+                    # Single page segment
+                    pi, y, h = seg
+                    img = page_images[pi]
+                    crop = img.crop((0, y, img.width, y + h))
+                else:
+                    # Cross-page segment
+                    pi, y, h1, pi2, h2 = seg
+                    img1 = page_images[pi]
+                    img2 = page_images[pi2]
+                    w = img1.width
+                    total_h = h1 + h2
+                    composite = Image.new('L' if img1.mode == 'L' else 'RGB', (w, total_h))
+                    composite.paste(img1.crop((0, y, w, y + h1)), (0, 0))
+                    composite.paste(img2.crop((0, 0, w, h2)), (0, h1))
+                    crop = composite
+
+                processed = process_for_eink(crop, device['width'], device['height'], rotate_cw=rotate_cw)
                 xtg_pages.append(image_to_xtg(processed))
+        else:
+            # Per-page mode (original behavior)
+            skip_detection = manga or total_pages > 100
+            panel_cache = {}
+            if not skip_detection:
+                progress(f"Detecting panels ({total_pages} pages, {NUM_WORKERS} workers)...")
+                panel_cache = detect_panels_parallel(content_pages, manga)
+
+            for page_idx, page_path in enumerate(content_pages):
+                if is_cancelled and is_cancelled():
+                    return None
+
+                progress(f"Processing page {page_idx + 2} of {total_pages}...")
+                img = Image.open(page_path)
+
+                if skip_detection:
+                    regions = split_page(img, [])
+                else:
+                    panels = panel_cache.get(str(page_path), detect_panels(page_path, manga=manga))
+                    regions = split_page(img, panels)
+
+                for ri, (rx, ry, rw, rh) in enumerate(regions):
+                    crop = img.crop((rx, ry, rx + rw, ry + rh))
+                    processed = process_for_eink(crop, device['width'], device['height'], rotate_cw=rotate_cw)
+                    xtg_pages.append(image_to_xtg(processed))
 
         progress("Building XTC...")
         xtc_path = out_dir / f"{title}.xtc"
@@ -214,7 +255,7 @@ def convert_kindle(comic_path, manga, title, progress):
         return None
 
 
-def run_conversion(job_id, filepath, devices):
+def run_conversion(job_id, filepath, devices, continuous=False, rotate_cw=False):
     """Run conversion in background thread."""
     job = jobs[job_id]
 
@@ -238,7 +279,7 @@ def run_conversion(job_id, filepath, devices):
             return
 
         if 'xteink' in devices:
-            path = convert_xteink_thirds(comic_path, manga, title, progress, is_cancelled)
+            path = convert_xteink_thirds(comic_path, manga, title, progress, is_cancelled, continuous=continuous, rotate_cw=rotate_cw)
             if is_cancelled():
                 return
             if path:
@@ -273,7 +314,7 @@ def run_conversion(job_id, filepath, devices):
             progress(f"Error: {e}")
 
 
-def run_mangadex_download(job_id, manga_id, manga_title, volume_nums, auto_convert, devices):
+def run_mangadex_download(job_id, manga_id, manga_title, volume_nums, auto_convert, devices, continuous=False, rotate_cw=False):
     """Download manga volumes from MangaDex in background thread."""
     job = jobs[job_id]
 
@@ -315,7 +356,7 @@ def run_mangadex_download(job_id, manga_id, manga_title, volume_nums, auto_conve
                 progress(f"Converting {title} ({'Manga' if manga else 'Western'})...")
 
                 if 'xteink' in devices:
-                    path = convert_xteink_thirds(cbz_path, manga, title, progress)
+                    path = convert_xteink_thirds(cbz_path, manga, title, progress, continuous=continuous, rotate_cw=rotate_cw)
                     if path:
                         results.append({
                             'device': 'XTe Ink X4',
@@ -437,6 +478,8 @@ def start_convert():
     data = request.json
     filename = data.get('filename')
     devices = data.get('devices', ['xteink'])
+    continuous = data.get('continuous', False)
+    rotate_cw = data.get('rotate_cw', False)
 
     if not filename:
         return jsonify({'error': 'No file specified'}), 400
@@ -461,7 +504,7 @@ def start_convert():
         'filename': filename,
     }
 
-    thread = threading.Thread(target=run_conversion, args=(job_id, filepath, devices))
+    thread = threading.Thread(target=run_conversion, args=(job_id, filepath, devices, continuous, rotate_cw))
     thread.daemon = True
     thread.start()
 
@@ -629,6 +672,8 @@ def mangadex_download():
     volume_nums = data.get('volumes', [])
     auto_convert = data.get('auto_convert', False)
     devices = data.get('devices', ['xteink'])
+    continuous = data.get('continuous', False)
+    rotate_cw = data.get('rotate_cw', False)
 
     if not manga_id or not volume_nums:
         return jsonify({'error': 'Missing manga_id or volumes'}), 400
@@ -643,7 +688,7 @@ def mangadex_download():
 
     thread = threading.Thread(
         target=run_mangadex_download,
-        args=(job_id, manga_id, manga_title, volume_nums, auto_convert, devices)
+        args=(job_id, manga_id, manga_title, volume_nums, auto_convert, devices, continuous, rotate_cw)
     )
     thread.daemon = True
     thread.start()
@@ -727,6 +772,8 @@ def source_download():
     volume_nums = data.get('volumes', [])
     auto_convert = data.get('auto_convert', False)
     devices = data.get('devices', ['xteink'])
+    continuous = data.get('continuous', False)
+    rotate_cw = data.get('rotate_cw', False)
 
     if not volume_nums:
         return jsonify({'error': 'No volumes selected'}), 400
@@ -741,7 +788,7 @@ def source_download():
 
     thread = threading.Thread(
         target=run_source_download,
-        args=(job_id, source, manga_id, manga_slug, manga_title, volume_nums, auto_convert, devices)
+        args=(job_id, source, manga_id, manga_slug, manga_title, volume_nums, auto_convert, devices, continuous, rotate_cw)
     )
     thread.daemon = True
     thread.start()
@@ -749,7 +796,7 @@ def source_download():
     return jsonify({'job_id': job_id})
 
 
-def run_source_download(job_id, source, manga_id, manga_slug, manga_title, volume_nums, auto_convert, devices):
+def run_source_download(job_id, source, manga_id, manga_slug, manga_title, volume_nums, auto_convert, devices, continuous=False, rotate_cw=False):
     job = jobs[job_id]
 
     def progress(msg):
@@ -814,7 +861,7 @@ def run_source_download(job_id, source, manga_id, manga_slug, manga_title, volum
                 progress(f"Converting {title} ({'Manga' if manga else 'Western'})...")
 
                 if 'xteink' in devices:
-                    path = convert_xteink_thirds(cbz_path, manga, title, progress)
+                    path = convert_xteink_thirds(cbz_path, manga, title, progress, continuous=continuous, rotate_cw=rotate_cw)
                     if path:
                         results.append({
                             'device': 'XTe Ink X4',
