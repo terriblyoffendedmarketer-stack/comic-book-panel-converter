@@ -903,11 +903,28 @@ def run_source_download(job_id, source, manga_id, manga_slug, manga_title, volum
 
 # --- Preview routes ---
 
+@app.route('/preview/upload', methods=['POST'])
+def preview_upload():
+    """Upload a file directly for preview (goes to output/Uploads/)."""
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file provided'}), 400
+    f = request.files['file']
+    if not f.filename:
+        return jsonify({'error': 'No filename'}), 400
+    folder = 'Uploads'
+    out_dir = OUTPUT_DIR / folder
+    out_dir.mkdir(parents=True, exist_ok=True)
+    safe_name = Path(f.filename).name
+    dest = out_dir / safe_name
+    f.save(str(dest))
+    return jsonify({'path': f'{folder}/{safe_name}'})
+
+
 @app.route('/preview/list')
 def preview_list():
     """List EPUB files available for preview."""
     epubs = []
-    for folder in ['XTe Ink', 'Kindle']:
+    for folder in ['XTe Ink', 'Kindle', 'Uploads']:
         folder_path = OUTPUT_DIR / folder
         if folder_path.exists():
             for f in sorted(folder_path.iterdir(), key=lambda x: x.name.lower()):

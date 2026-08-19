@@ -1076,20 +1076,29 @@ document.getElementById('previewSelect').addEventListener('change', async (e) =>
 document.getElementById('previewFileInput').addEventListener('change', async (e) => {
   const file = e.target.files[0];
   if (!file) return;
+  const label = e.target.closest('label');
+  const origText = label.textContent.trim();
+  label.textContent = `Uploading ${file.name}...`;
 
   const form = new FormData();
-  form.append('files', file);
+  form.append('file', file);
   try {
-    const uploadRes = await fetch('/upload', { method: 'POST', body: form });
-    await uploadRes.json();
-
-    const epubName = file.name;
-    // For preview, we need it in output - copy from input to a temp preview location
-    // Actually let's just handle it differently: upload EPUBs go to output for preview
-  } catch (err) {}
-
-  // For now, show a message - EPUB preview needs the file in output/
-  // The user should select from the dropdown after conversion
+    const res = await fetch('/preview/upload', { method: 'POST', body: form });
+    const data = await res.json();
+    if (data.path) {
+      await loadPreviewList();
+      document.getElementById('previewSelect').value = data.path;
+      await loadPreviewPages(data.path);
+      label.textContent = origText;
+    } else {
+      label.textContent = data.error || 'Upload failed';
+      setTimeout(() => label.textContent = origText, 3000);
+    }
+  } catch (err) {
+    label.textContent = 'Upload failed';
+    setTimeout(() => label.textContent = origText, 3000);
+  }
+  e.target.value = '';
 });
 
 async function loadPreviewPages(epubPath) {
