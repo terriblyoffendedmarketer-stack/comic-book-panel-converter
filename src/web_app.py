@@ -29,7 +29,8 @@ sys.path.insert(0, str(ROOT / 'src'))
 
 from extract import extract, detect_reading_direction
 from detect_panels import detect_panels
-from split_page import split_page, process_for_eink, process_cover_for_eink, calculate_continuous_segments
+from xtc_pipeline import (get_segments, process_page, process_cover,
+                          calculate_continuous_segments)
 from build_epub import build_epub
 from build_xtc import image_to_xtg, build_xtc
 from mangadex import search_manga, get_volumes, download_volume_as_cbz
@@ -115,6 +116,7 @@ def detect_panels_parallel(pages, manga):
 def convert_xteink_thirds(comic_path, manga, title, progress, is_cancelled=None, continuous=False, rotate_cw=False):
     """Convert for XTe Ink using overlapping thirds + XTC native format."""
     device = DEVICE_PROFILES['xteink']
+    tw, th = device['width'], device['height']
     out_dir = OUTPUT_DIR / device['folder']
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -135,15 +137,13 @@ def convert_xteink_thirds(comic_path, manga, title, progress, is_cancelled=None,
         total_pages = len(pages)
         xtg_pages = []
 
-        # Cover page — always first, never split
         cover_img = Image.open(pages[0])
-        cover = process_cover_for_eink(cover_img, device['width'], device['height'])
+        cover = process_cover(cover_img, target_w=tw, target_h=th)
         xtg_pages.append(image_to_xtg(cover))
 
         content_pages = pages[1:]
 
         if continuous and content_pages:
-            # Continuous overlap mode: treat all pages as one vertical strip
             progress("Loading pages for continuous layout...")
             page_images = []
             for p in content_pages:
@@ -163,26 +163,22 @@ def convert_xteink_thirds(comic_path, manga, title, progress, is_cancelled=None,
 
                 if seg[0] == 'landscape':
                     img = page_images[seg[1]]
-                    processed = process_for_eink(img, device['width'], device['height'], rotate_cw=rotate_cw)
                 elif len(seg) == 3:
                     pi, y, h = seg
-                    img = page_images[pi]
-                    crop = img.crop((0, y, img.width, y + h))
-                    processed = process_for_eink(crop, device['width'], device['height'], rotate_cw=rotate_cw)
+                    img = page_images[pi].crop((0, y, page_images[pi].width, y + h))
                 else:
                     pi, y, h1, pi2, h2 = seg
                     img1 = page_images[pi]
                     img2 = page_images[pi2]
                     w = img1.width
-                    total_h = h1 + h2
-                    composite = Image.new('L' if img1.mode == 'L' else 'RGB', (w, total_h))
+                    composite = Image.new('L' if img1.mode == 'L' else 'RGB', (w, h1 + h2))
                     composite.paste(img1.crop((0, y, w, y + h1)), (0, 0))
                     composite.paste(img2.crop((0, 0, w, h2)), (0, h1))
-                    processed = process_for_eink(composite, device['width'], device['height'], rotate_cw=rotate_cw)
+                    img = composite
 
+                processed = process_page(img, rotate_cw=rotate_cw, target_w=tw, target_h=th)
                 xtg_pages.append(image_to_xtg(processed))
         else:
-            # Per-page mode (original behavior)
             skip_detection = manga or total_pages > 100
             panel_cache = {}
             if not skip_detection:
@@ -196,15 +192,12 @@ def convert_xteink_thirds(comic_path, manga, title, progress, is_cancelled=None,
                 progress(f"Processing page {page_idx + 2} of {total_pages}...")
                 img = Image.open(page_path)
 
-                if skip_detection:
-                    regions = split_page(img, [])
-                else:
-                    panels = panel_cache.get(str(page_path), detect_panels(page_path, manga=manga))
-                    regions = split_page(img, panels)
+                panels = [] if skip_detection else panel_cache.get(str(page_path), detect_panels(page_path, manga=manga))
+                regions = get_segments(img.width, img.height, panels)
 
-                for ri, (rx, ry, rw, rh) in enumerate(regions):
+                for rx, ry, rw, rh in regions:
                     crop = img.crop((rx, ry, rx + rw, ry + rh))
-                    processed = process_for_eink(crop, device['width'], device['height'], rotate_cw=rotate_cw)
+                    processed = process_page(crop, rotate_cw=rotate_cw, target_w=tw, target_h=th)
                     xtg_pages.append(image_to_xtg(processed))
 
         progress("Building XTC...")

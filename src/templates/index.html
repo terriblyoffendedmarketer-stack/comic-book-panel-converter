@@ -469,6 +469,7 @@
     <button id="prevPage">Prev</button>
     <span class="page-info" id="pageInfo">1 / 1</span>
     <button id="nextPage">Next</button>
+    <button id="closePreview" class="cancel-btn" style="margin-left:auto">Close</button>
   </div>
 </div>
 
@@ -558,6 +559,25 @@ document.querySelectorAll('.tab').forEach(tab => {
   });
 });
 
+// Shared upload helper with progress callback
+function uploadWithProgress(formData, url, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', url);
+    xhr.upload.onprogress = e => {
+      if (e.lengthComputable && onProgress) onProgress(Math.round(e.loaded / e.total * 100));
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) resolve(JSON.parse(xhr.responseText));
+      else reject(new Error('Upload failed (status ' + xhr.status + ')'));
+    };
+    xhr.onerror = () => reject(new Error('Upload failed — connection error'));
+    xhr.ontimeout = () => reject(new Error('Upload timed out'));
+    xhr.timeout = 600000;
+    xhr.send(formData);
+  });
+}
+
 // ===== CONVERT TAB =====
 const dropZone = document.getElementById('dropZone');
 const fileInput = document.getElementById('fileInput');
@@ -578,16 +598,46 @@ fileInput.addEventListener('change', () => uploadFiles(fileInput.files));
 
 async function uploadFiles(files) {
   const form = new FormData();
-  for (const f of files) form.append('files', f);
+  let totalSize = 0;
+  for (const f of files) { form.append('files', f); totalSize += f.size; }
+  const names = Array.from(files).map(f => f.name).join(', ');
+
+  dropZone.innerHTML = `<p><span class="spinner"></span> Uploading ${names}... <span id="uploadPct">0%</span></p>`;
+  dropZone.style.pointerEvents = 'none';
+
   try {
-    const res = await fetch('/upload', { method: 'POST', body: form });
-    const data = await res.json();
+    const data = await new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', '/upload');
+      xhr.upload.onprogress = e => {
+        if (e.lengthComputable) {
+          const pct = Math.round(e.loaded / e.total * 100);
+          const el = document.getElementById('uploadPct');
+          if (el) el.textContent = pct + '%';
+        }
+      };
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve(JSON.parse(xhr.responseText));
+        } else {
+          reject(new Error('Upload failed (status ' + xhr.status + ')'));
+        }
+      };
+      xhr.onerror = () => reject(new Error('Upload failed — connection error'));
+      xhr.ontimeout = () => reject(new Error('Upload timed out'));
+      xhr.timeout = 600000;
+      xhr.send(form);
+    });
+
     if (data.length > 0) {
       data.forEach(f => selectedFiles.add(f.name));
       loadExistingFiles();
     }
   } catch (e) {
-    document.getElementById('convertError').textContent = 'Upload failed: ' + e.message;
+    document.getElementById('convertError').textContent = e.message;
+  } finally {
+    dropZone.innerHTML = '<p>Drop comic files here or <span class="browse">browse</span></p>';
+    dropZone.style.pointerEvents = '';
   }
 }
 
@@ -1078,13 +1128,13 @@ document.getElementById('previewFileInput').addEventListener('change', async (e)
   if (!file) return;
   const label = e.target.closest('label');
   const origText = label.textContent.trim();
-  label.textContent = `Uploading ${file.name}...`;
 
   const form = new FormData();
   form.append('file', file);
   try {
-    const res = await fetch('/preview/upload', { method: 'POST', body: form });
-    const data = await res.json();
+    const data = await uploadWithProgress(form, '/preview/upload', pct => {
+      label.textContent = `Uploading ${file.name}... ${pct}%`;
+    });
     if (data.path) {
       await loadPreviewList();
       document.getElementById('previewSelect').value = data.path;
@@ -1124,8 +1174,11 @@ function showPreview() {
 function hidePreview() {
   document.getElementById('previewViewport').style.display = 'none';
   document.getElementById('previewNav').style.display = 'none';
+  document.getElementById('previewSelect').value = '';
   previewPages = [];
 }
+
+document.getElementById('closePreview').addEventListener('click', hidePreview);
 
 function updatePreviewViewport() {
   const vp = document.getElementById('previewViewport');
@@ -1388,13 +1441,13 @@ document.getElementById('deviceFileInput').addEventListener('change', async (e) 
   const file = e.target.files[0];
   if (!file) return;
   const status = document.getElementById('deviceUploadStatus');
-  status.textContent = `Uploading ${file.name}...`;
   status.style.color = 'var(--accent)';
   try {
     const form = new FormData();
     form.append('file', file);
-    const res = await fetch('/device/upload', { method: 'POST', body: form });
-    const data = await res.json();
+    const data = await uploadWithProgress(form, '/device/upload', pct => {
+      status.textContent = `Uploading ${file.name}... ${pct}%`;
+    });
     if (data.ok) {
       status.textContent = 'Uploaded!';
       status.style.color = 'var(--success-border)';
