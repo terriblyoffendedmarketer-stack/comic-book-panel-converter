@@ -33,8 +33,11 @@ Converts comic book files (CBZ/CBR/CB7) into e-reader optimized formats: XTC for
 13. [x] PWA manifest — installable as app from browser
 14. [x] Cloud deployment (Fly.io) — live at comic-converter.fly.dev
 15. [x] Landscape-first mode — segments rotated 90° for landscape reading (xtcjs default)
-16. [ ] PDF input support
-17. [ ] Mihon chapter combining — merge downloaded chapter CBZs into volumes
+16. [x] Continuous scroll mode — uniform overlap across page boundaries (no jarring breaks)
+17. [x] Direct file upload to OPDS catalog — upload .epub/.xtc from computer to Vercel Blob
+18. [x] XTC preview — decode and render XTG pages in Preview tab
+19. [ ] PDF input support
+20. [ ] Mihon chapter combining — merge downloaded chapter CBZs into volumes
 
 ## Overlapping Thirds — xtcjs Algorithm (split_page.py)
 
