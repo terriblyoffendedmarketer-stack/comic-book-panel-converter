@@ -38,8 +38,6 @@ from mangapill import search_manga as mp_search, get_volumes as mp_volumes, down
 from onemanga import search_manga as om_search, get_volumes as om_volumes, download_volume_as_cbz as om_download
 from PIL import Image
 import re
-import requests as http_requests
-import blob_store
 
 CLOUD = bool(os.environ.get('RAILWAY_ENVIRONMENT') or os.environ.get('FLY_APP_NAME'))
 
@@ -308,7 +306,7 @@ def run_conversion(job_id, filepath, devices, continuous=False, rotate_cw=False,
             progress(f"Error: {e}")
 
 
-def run_mangadex_download(job_id, manga_id, manga_title, volume_nums, auto_convert, devices, continuous=False, rotate_cw=False, dither_algo='floyd'):
+def run_mangadex_download(job_id, manga_id, manga_title, volume_nums):
     """Download manga volumes from MangaDex in background thread."""
     job = jobs[job_id]
 
@@ -340,48 +338,7 @@ def run_mangadex_download(job_id, manga_id, manga_title, volume_nums, auto_conve
             Path(cbz_path).with_suffix('.manga').touch()
             log_download(cbz_path.name)
 
-        if auto_convert and downloaded_files and devices:
-            progress("Starting conversion...")
-            results = []
-            for cbz_path in downloaded_files:
-                title = cbz_path.stem
-                direction, reason = detect_reading_direction(cbz_path)
-                manga = (direction == 'rtl')
-                progress(f"Converting {title} ({'Manga' if manga else 'Western'})...")
-
-                if 'xteink' in devices:
-                    path = convert_xteink_thirds(cbz_path, manga, title, progress, continuous=continuous, rotate_cw=rotate_cw, dither_algo=dither_algo)
-                    if path:
-                        results.append({
-                            'device': 'XTe Ink X4',
-                            'filename': Path(path).name,
-                            'folder': 'XTe Ink',
-                            'path': path,
-                        })
-
-                if 'kindle' in devices:
-                    path = convert_kindle(cbz_path, manga, title, progress)
-                    if path:
-                        results.append({
-                            'device': 'Kindle Paperwhite',
-                            'filename': Path(path).name,
-                            'folder': 'Kindle',
-                            'path': path,
-                        })
-
-            if CLOUD:
-                for cbz_path in downloaded_files:
-                    try:
-                        cbz_path.unlink()
-                        Path(cbz_path).with_suffix('.manga').unlink(missing_ok=True)
-                        progress(f"Cleaned up {cbz_path.name}")
-                    except OSError:
-                        pass
-
-            job['results'] = results
-        else:
-            job['results'] = [{'device': 'Downloaded', 'filename': p.name, 'folder': '_input', 'path': str(p)} for p in downloaded_files]
-
+        job['results'] = [{'device': 'Downloaded', 'filename': p.name, 'folder': '_input', 'path': str(p)} for p in downloaded_files]
         job['status'] = 'done'
         progress("Done!")
 
@@ -665,11 +622,6 @@ def mangadex_download():
     manga_id = data.get('manga_id')
     manga_title = data.get('manga_title', 'Manga')
     volume_nums = data.get('volumes', [])
-    auto_convert = data.get('auto_convert', False)
-    devices = data.get('devices', ['xteink'])
-    continuous = data.get('continuous', False)
-    rotate_cw = data.get('rotate_cw', False)
-    dither_algo = data.get('dither', 'floyd')
 
     if not manga_id or not volume_nums:
         return jsonify({'error': 'Missing manga_id or volumes'}), 400
@@ -684,7 +636,7 @@ def mangadex_download():
 
     thread = threading.Thread(
         target=run_mangadex_download,
-        args=(job_id, manga_id, manga_title, volume_nums, auto_convert, devices, continuous, rotate_cw, dither_algo)
+        args=(job_id, manga_id, manga_title, volume_nums)
     )
     thread.daemon = True
     thread.start()
@@ -766,11 +718,6 @@ def source_download():
     manga_slug = data.get('manga_slug', '')
     manga_title = data.get('manga_title', 'Manga')
     volume_nums = data.get('volumes', [])
-    auto_convert = data.get('auto_convert', False)
-    devices = data.get('devices', ['xteink'])
-    continuous = data.get('continuous', False)
-    rotate_cw = data.get('rotate_cw', False)
-    dither_algo = data.get('dither', 'floyd')
 
     if not volume_nums:
         return jsonify({'error': 'No volumes selected'}), 400
@@ -785,7 +732,7 @@ def source_download():
 
     thread = threading.Thread(
         target=run_source_download,
-        args=(job_id, source, manga_id, manga_slug, manga_title, volume_nums, auto_convert, devices, continuous, rotate_cw, dither_algo)
+        args=(job_id, source, manga_id, manga_slug, manga_title, volume_nums)
     )
     thread.daemon = True
     thread.start()
@@ -793,7 +740,7 @@ def source_download():
     return jsonify({'job_id': job_id})
 
 
-def run_source_download(job_id, source, manga_id, manga_slug, manga_title, volume_nums, auto_convert, devices, continuous=False, rotate_cw=False, dither_algo='floyd'):
+def run_source_download(job_id, source, manga_id, manga_slug, manga_title, volume_nums):
     job = jobs[job_id]
 
     def progress(msg):
@@ -848,48 +795,7 @@ def run_source_download(job_id, source, manga_id, manga_slug, manga_title, volum
             Path(cbz_path).with_suffix('.manga').touch()
             log_download(cbz_path.name)
 
-        if auto_convert and downloaded_files and devices:
-            progress("Starting conversion...")
-            results = []
-            for cbz_path in downloaded_files:
-                title = cbz_path.stem
-                direction, reason = detect_reading_direction(cbz_path)
-                manga = (direction == 'rtl')
-                progress(f"Converting {title} ({'Manga' if manga else 'Western'})...")
-
-                if 'xteink' in devices:
-                    path = convert_xteink_thirds(cbz_path, manga, title, progress, continuous=continuous, rotate_cw=rotate_cw, dither_algo=dither_algo)
-                    if path:
-                        results.append({
-                            'device': 'XTe Ink X4',
-                            'filename': Path(path).name,
-                            'folder': 'XTe Ink',
-                            'path': path,
-                        })
-
-                if 'kindle' in devices:
-                    path = convert_kindle(cbz_path, manga, title, progress)
-                    if path:
-                        results.append({
-                            'device': 'Kindle Paperwhite',
-                            'filename': Path(path).name,
-                            'folder': 'Kindle',
-                            'path': path,
-                        })
-
-            if CLOUD:
-                for cbz_path in downloaded_files:
-                    try:
-                        cbz_path.unlink()
-                        Path(cbz_path).with_suffix('.manga').unlink(missing_ok=True)
-                        progress(f"Cleaned up {cbz_path.name}")
-                    except OSError:
-                        pass
-
-            job['results'] = results
-        else:
-            job['results'] = [{'device': 'Downloaded', 'filename': p.name, 'folder': '_input', 'path': str(p)} for p in downloaded_files]
-
+        job['results'] = [{'device': 'Downloaded', 'filename': p.name, 'folder': '_input', 'path': str(p)} for p in downloaded_files]
         progress("Done!")
         job['status'] = 'done'
     except Exception as e:
@@ -1008,196 +914,6 @@ def preview_image(file_path, page_idx):
 
         from flask import Response
         return Response(img_data, mimetype=mime)
-
-
-# --- OPDS feed for XTe Ink device ---
-
-def _check_opds_auth():
-    """Verify HTTP Basic auth for OPDS routes."""
-    from flask import Response
-    username = os.environ.get('AUTH_USERNAME', '')
-    password = os.environ.get('AUTH_PASSWORD', '')
-    if not username:
-        return None
-
-    auth = request.authorization
-    if not auth or auth.username != username or auth.password != password:
-        return Response(
-            'Authentication required', 401,
-            {'WWW-Authenticate': 'Basic realm="Comic Book Converter"'}
-        )
-    return None
-
-
-@app.route('/opds')
-def opds_feed():
-    """OPDS acquisition feed for CrossPoint reader on XTe Ink."""
-    from flask import Response
-    auth_err = _check_opds_auth()
-    if auth_err:
-        return auth_err
-
-    if not blob_store.is_configured():
-        feed = '''<?xml version="1.0" encoding="UTF-8"?>
-<feed xmlns="http://www.w3.org/2005/Atom">
-  <id>urn:comic-converter</id>
-  <title>Comic Book Converter</title>
-  <updated>{now}</updated>
-</feed>'''.format(now=__import__('datetime').datetime.utcnow().isoformat() + 'Z')
-        return Response(feed, mimetype='application/atom+xml;profile=opds-catalog;kind=acquisition')
-
-    blobs = blob_store.list_files()
-    blobs.sort(key=lambda b: b.get('uploadedAt', ''), reverse=True)
-
-    base_url = request.url_root.rstrip('/')
-    updated = blobs[0]['uploadedAt'] if blobs else __import__('datetime').datetime.utcnow().isoformat() + 'Z'
-
-    def escape_xml(s):
-        return s.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;')
-
-    def format_size(b):
-        if b < 1024: return f"{b} B"
-        if b < 1024 * 1024: return f"{b/1024:.1f} KB"
-        return f"{b/(1024*1024):.1f} MB"
-
-    entries = []
-    for blob in blobs:
-        pathname = blob['pathname'].replace('books/', '')
-        title = pathname.replace('.epub', '').replace('.xtc', '')
-        mime_type = 'application/octet-stream' if pathname.endswith('.xtc') else 'application/epub+zip'
-        entries.append(f'''  <entry>
-    <title>{escape_xml(title)}</title>
-    <id>{escape_xml(blob['url'])}</id>
-    <updated>{blob['uploadedAt']}</updated>
-    <content type="text">{escape_xml(title)} ({format_size(blob['size'])})</content>
-    <link rel="http://opds-spec.org/acquisition"
-          href="{base_url}/opds/download?url={__import__('urllib.parse', fromlist=['quote']).quote(blob['url'], safe='')}"
-          type="{mime_type}"
-          length="{blob['size']}"/>
-  </entry>''')
-
-    feed = f'''<?xml version="1.0" encoding="UTF-8"?>
-<feed xmlns="http://www.w3.org/2005/Atom"
-      xmlns:opds="http://opds-spec.org/2010/catalog">
-  <id>urn:comic-converter</id>
-  <title>Comic Book Converter</title>
-  <updated>{updated}</updated>
-  <author><name>Comic Book Converter</name></author>
-  <link rel="self" href="{base_url}/opds" type="application/atom+xml;profile=opds-catalog;kind=acquisition"/>
-  <link rel="start" href="{base_url}/opds" type="application/atom+xml;profile=opds-catalog;kind=acquisition"/>
-{chr(10).join(entries)}
-</feed>'''
-
-    return Response(feed, mimetype='application/atom+xml;profile=opds-catalog;kind=acquisition')
-
-
-@app.route('/opds/download')
-def opds_download():
-    """Proxy download from Vercel Blob (auth-protected)."""
-    auth_err = _check_opds_auth()
-    if auth_err:
-        return auth_err
-
-    from flask import Response
-    blob_url = request.args.get('url', '')
-    if not blob_url:
-        return jsonify({'error': 'Missing url param'}), 400
-
-    resp = http_requests.get(blob_url, timeout=120, stream=True)
-    if not resp.ok:
-        return jsonify({'error': 'Download failed'}), 502
-
-    filename = blob_url.split('/')[-1].split('?')[0] or 'book.epub'
-    content_type = 'application/octet-stream' if filename.endswith('.xtc') else 'application/epub+zip'
-    headers = {
-        'Content-Type': content_type,
-        'Content-Disposition': f'attachment; filename="{filename}"',
-    }
-    if resp.headers.get('content-length'):
-        headers['Content-Length'] = resp.headers['content-length']
-
-    return Response(resp.iter_content(chunk_size=8192), headers=headers)
-
-
-@app.route('/device/books')
-def device_books():
-    """List books on the device catalog (Vercel Blob)."""
-    if not blob_store.is_configured():
-        return jsonify({'configured': False, 'books': []})
-
-    blobs = blob_store.list_files()
-    books = []
-    for b in sorted(blobs, key=lambda x: x.get('uploadedAt', ''), reverse=True):
-        title = b['pathname'].replace('books/', '').replace('.epub', '').replace('.xtc', '')
-        size_mb = b['size'] / (1024 * 1024)
-        books.append({
-            'title': title,
-            'url': b['url'],
-            'size': f"{size_mb:.1f} MB",
-            'uploaded': b['uploadedAt'],
-        })
-    return jsonify({'configured': True, 'books': books})
-
-
-@app.route('/device/send', methods=['POST'])
-def device_send():
-    """Upload an EPUB to Vercel Blob for the device catalog."""
-    if not blob_store.is_configured():
-        return jsonify({'error': 'Blob storage not configured. Set BLOB_READ_WRITE_TOKEN.'}), 503
-
-    data = request.json
-    folder = data.get('folder', '')
-    filename = data.get('filename', '')
-    if not folder or not filename:
-        return jsonify({'error': 'Missing folder or filename'}), 400
-
-    filepath = OUTPUT_DIR / folder / filename
-    if not filepath.exists():
-        return jsonify({'error': 'File not found'}), 404
-
-    try:
-        url = blob_store.upload(str(filepath), filename)
-        return jsonify({'ok': True, 'url': url})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route('/device/upload', methods=['POST'])
-def device_upload():
-    """Upload a file directly from the user's computer to Vercel Blob."""
-    if not blob_store.is_configured():
-        return jsonify({'error': 'Blob storage not configured. Set BLOB_READ_WRITE_TOKEN.'}), 503
-
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file provided'}), 400
-
-    f = request.files['file']
-    if not f.filename:
-        return jsonify({'error': 'No filename'}), 400
-
-    try:
-        url = blob_store.upload_bytes(f.read(), f.filename)
-        return jsonify({'ok': True, 'url': url})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route('/device/delete', methods=['POST'])
-def device_delete():
-    """Remove a book from the device catalog."""
-    if not blob_store.is_configured():
-        return jsonify({'error': 'Not configured'}), 503
-
-    data = request.json
-    url = data.get('url', '')
-    if not url:
-        return jsonify({'error': 'Missing url'}), 400
-
-    try:
-        blob_store.delete(url)
-        return jsonify({'ok': True})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
 
 
 if __name__ == '__main__':

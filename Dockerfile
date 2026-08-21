@@ -16,6 +16,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 \
     libglib2.0-0 \
     git \
+    gcc \
+    libc6-dev \
     && rm -rf /var/lib/apt/lists/* \
     && ln -sf /usr/bin/7z /usr/bin/7zz
 
@@ -30,6 +32,7 @@ ENV PORT=8080
 ENV DATA_DIR=/data
 
 RUN mkdir -p /data/input /data/output
+RUN gcc -O2 -shared -fPIC -o src/dither_native.so src/dither_native.c
 
 EXPOSE 8080
 

@@ -324,7 +324,6 @@
   <button class="tab active" data-tab="convert">Convert</button>
   <button class="tab" data-tab="mangadex">Download</button>
   <button class="tab" data-tab="preview">Preview</button>
-  <button class="tab" data-tab="device">Device</button>
 </div>
 
 <!-- CONVERT TAB -->
@@ -345,9 +344,9 @@
     <label><input type="checkbox" id="optRotateCw"> Flip landscape direction</label>
     <div style="margin-top:6px">
       <span style="color:var(--muted); margin-right:8px">Dithering:</span>
-      <label style="margin-right:12px"><input type="radio" name="dither" value="floyd" checked> Floyd-Steinberg</label>
-      <label style="margin-right:12px"><input type="radio" name="dither" value="sierra-lite"> Sierra Lite</label>
-      <label><input type="radio" name="dither" value="atkinson"> Atkinson</label>
+      <label style="margin-right:12px" title="Best all-rounder. Smooth gradients, deep blacks. Works great for manga and color comics."><input type="radio" name="dither" value="floyd" checked> Floyd-Steinberg <span style="font-size:10px;color:var(--muted)">(balanced)</span></label>
+      <label style="margin-right:12px" title="Faster diffusion, slightly sharper. Good for detailed line art and text-heavy pages."><input type="radio" name="dither" value="sierra-lite"> Sierra Lite <span style="font-size:10px;color:var(--muted)">(sharper)</span></label>
+      <label title="Preserves contrast, less mid-tone noise. Best for color comics with flat shading."><input type="radio" name="dither" value="atkinson"> Atkinson <span style="font-size:10px;color:var(--muted)">(high contrast)</span></label>
     </div>
   </div>
 
@@ -418,16 +417,6 @@
       <button id="mdRangeAddBtn">Add</button>
     </div>
 
-    <label class="auto-convert-opt">
-      <input type="checkbox" id="mdAutoConvert" checked>
-      Auto-convert after download
-    </label>
-
-    <div class="device-options" id="mdDeviceOpts">
-      <label><input type="checkbox" id="mdDevXteink" checked> XTe Ink X4</label>
-      <label><input type="checkbox" id="mdDevKindle"> Kindle Paperwhite</label>
-    </div>
-
     <button class="primary" id="mdDownloadBtn" disabled>Download</button>
   </div>
 
@@ -479,48 +468,6 @@
   </div>
 </div>
 
-<!-- DEVICE TAB -->
-<div class="tab-content" id="tab-device">
-  <h2>Send to XTe Ink</h2>
-  <p style="font-size:13px; color:var(--muted); margin-bottom:12px">
-    Send converted files to your XTe Ink device via OPDS. Books appear in CrossPoint reader.
-  </p>
-
-  <div id="deviceNotConfigured" style="display:none">
-    <div style="padding:20px; background:var(--card); border:1px solid var(--border); border-radius:8px; text-align:center; color:var(--muted); font-size:13px;">
-      <p style="margin-bottom:8px">Blob storage not configured.</p>
-      <p>Set <code>BLOB_READ_WRITE_TOKEN</code>, <code>AUTH_USERNAME</code>, and <code>AUTH_PASSWORD</code> environment variables.</p>
-    </div>
-  </div>
-
-  <div id="deviceConfigured" style="display:none">
-    <h2>Upload to catalog</h2>
-    <div style="margin-bottom:16px">
-      <label style="display:inline-block; padding:10px 20px; border:2px dashed var(--border); border-radius:8px; cursor:pointer; font-size:13px; color:var(--accent); text-align:center;">
-        Choose file to upload (.epub / .xtc)
-        <input type="file" id="deviceFileInput" accept=".epub,.xtc" style="display:none">
-      </label>
-      <span id="deviceUploadStatus" style="margin-left:10px; font-size:13px; color:var(--muted)"></span>
-    </div>
-
-    <h2>Send from server</h2>
-    <div id="deviceLocalList" style="margin-bottom:16px">
-      <div style="color:var(--muted); font-size:13px">Loading...</div>
-    </div>
-
-    <h2>On device catalog</h2>
-    <div id="deviceBookList">
-      <div style="color:var(--muted); font-size:13px">Loading...</div>
-    </div>
-
-    <div style="margin-top:16px; padding:12px; background:var(--card); border:1px solid var(--border); border-radius:8px; font-size:12px; color:var(--muted);">
-      <strong style="color:var(--text)">OPDS Setup</strong><br>
-      On XTe Ink: Settings &gt; System &gt; OPDS Servers &gt; Add<br>
-      URL: <code id="opdsUrl"></code><br>
-      Use the credentials from your AUTH_USERNAME / AUTH_PASSWORD env vars.
-    </div>
-  </div>
-</div>
 
 <script>
 const CLOUD = {{ 'true' if cloud else 'false' }};
@@ -561,7 +508,6 @@ document.querySelectorAll('.tab').forEach(tab => {
     document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
     if (tab.dataset.tab === 'preview') loadPreviewList();
     if (tab.dataset.tab === 'convert') { loadExistingFiles(); loadOutputFiles(); }
-    if (tab.dataset.tab === 'device') loadDeviceTab();
   });
 });
 
@@ -1036,11 +982,6 @@ document.getElementById('mdDownloadBtn').addEventListener('click', async () => {
   const btn = document.getElementById('mdDownloadBtn');
   btn.disabled = true;
 
-  const autoConvert = document.getElementById('mdAutoConvert').checked;
-  const devices = [];
-  if (document.getElementById('mdDevXteink').checked) devices.push('xteink');
-  if (document.getElementById('mdDevKindle').checked) devices.push('kindle');
-
   const progressBox = document.getElementById('mdProgress');
   const progressText = document.getElementById('mdProgressText');
   const progressLog = document.getElementById('mdLog');
@@ -1060,11 +1001,6 @@ document.getElementById('mdDownloadBtn').addEventListener('click', async () => {
       manga_title: selectedManga.title,
       manga_slug: selectedManga.slug || '',
       volumes: [...selectedVolumes],
-      auto_convert: autoConvert,
-      devices: devices,
-      continuous: document.getElementById('optContinuous').checked,
-      rotate_cw: document.getElementById('optRotateCw').checked,
-      dither: document.querySelector('input[name="dither"]:checked').value,
     };
     if (source !== 'mangadex') payload.source = source;
 
@@ -1327,148 +1263,6 @@ if (!CLOUD) {
   fl.innerHTML = `<a href="#" style="color:var(--accent)" onclick="event.preventDefault();fetch('/open-folder/input')">Open input folder</a>
     <a href="#" style="color:var(--accent)" onclick="event.preventDefault();fetch('/open-folder/output')">Open output folder</a>`;
 }
-
-// ===== DEVICE TAB =====
-document.getElementById('opdsUrl').textContent = window.location.origin + '/opds';
-
-async function loadDeviceTab() {
-  const booksRes = await fetch('/device/books');
-  const booksData = await booksRes.json();
-
-  if (!booksData.configured) {
-    document.getElementById('deviceNotConfigured').style.display = 'block';
-    document.getElementById('deviceConfigured').style.display = 'none';
-    return;
-  }
-
-  document.getElementById('deviceNotConfigured').style.display = 'none';
-  document.getElementById('deviceConfigured').style.display = 'block';
-
-  // Load local EPUBs available to send
-  const localList = document.getElementById('deviceLocalList');
-  try {
-    const previewRes = await fetch('/preview/list');
-    const epubs = await previewRes.json();
-
-    if (epubs.length === 0) {
-      localList.innerHTML = '<div style="color:var(--muted); font-size:13px">No converted files yet. Convert some comics first.</div>';
-    } else {
-      localList.innerHTML = '';
-      const catalogUrls = new Set(booksData.books.map(b => b.title));
-      epubs.forEach(epub => {
-        const alreadySent = catalogUrls.has(epub.name.replace('.epub', '').replace('.xtc', ''));
-        const row = document.createElement('div');
-        row.style.cssText = 'display:flex; align-items:center; justify-content:space-between; padding:7px 10px; background:var(--card); border:1px solid var(--border); border-radius:6px; margin-bottom:3px; font-size:13px;';
-        const info = document.createElement('span');
-        info.textContent = `${epub.name} (${epub.size})`;
-        row.appendChild(info);
-
-        const btn = document.createElement('button');
-        if (alreadySent) {
-          btn.textContent = 'Sent';
-          btn.disabled = true;
-          btn.style.cssText = 'padding:4px 12px; font-size:12px; border:1px solid var(--border); border-radius:4px; background:var(--card); color:var(--muted); cursor:default;';
-        } else {
-          btn.textContent = 'Send to device';
-          btn.style.cssText = 'padding:4px 12px; font-size:12px; border:none; border-radius:4px; background:var(--accent); color:#fff; cursor:pointer; white-space:nowrap;';
-          btn.addEventListener('click', async () => {
-            btn.textContent = 'Sending...';
-            btn.disabled = true;
-            try {
-              const res = await fetch('/device/send', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ folder: epub.folder, filename: epub.name })
-              });
-              const data = await res.json();
-              if (data.ok) {
-                btn.textContent = 'Sent';
-                btn.style.background = 'var(--success-border)';
-                loadDeviceCatalog();
-              } else {
-                btn.textContent = 'Failed';
-                btn.style.background = 'var(--danger)';
-              }
-            } catch(e) {
-              btn.textContent = 'Error';
-            }
-          });
-        }
-        row.appendChild(btn);
-        localList.appendChild(row);
-      });
-    }
-  } catch(e) {
-    localList.innerHTML = '<div style="color:var(--muted); font-size:13px">Failed to load converted files</div>';
-  }
-
-  loadDeviceCatalog(booksData.books);
-}
-
-function loadDeviceCatalog(books) {
-  const container = document.getElementById('deviceBookList');
-  if (!books || books.length === 0) {
-    container.innerHTML = '<div style="color:var(--muted); font-size:13px">No books in device catalog yet.</div>';
-    return;
-  }
-
-  container.innerHTML = '';
-  books.forEach(book => {
-    const row = document.createElement('div');
-    row.style.cssText = 'display:flex; align-items:center; justify-content:space-between; padding:7px 10px; background:var(--card); border:1px solid var(--success-border); border-radius:6px; margin-bottom:3px; font-size:13px;';
-    const info = document.createElement('span');
-    info.innerHTML = `${escapeHtml(book.title)} <span style="color:var(--muted); font-size:11px">${book.size}</span>`;
-    row.appendChild(info);
-
-    const del = document.createElement('button');
-    del.textContent = 'Remove';
-    del.className = 'cancel-btn';
-    del.style.marginLeft = '0';
-    del.addEventListener('click', async () => {
-      del.textContent = 'Removing...';
-      del.disabled = true;
-      try {
-        await fetch('/device/delete', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: book.url })
-        });
-        row.remove();
-      } catch(e) {
-        del.textContent = 'Failed';
-      }
-    });
-    row.appendChild(del);
-    container.appendChild(row);
-  });
-}
-
-// Device file upload
-document.getElementById('deviceFileInput').addEventListener('change', async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  const status = document.getElementById('deviceUploadStatus');
-  status.style.color = 'var(--accent)';
-  try {
-    const form = new FormData();
-    form.append('file', file);
-    const data = await uploadWithProgress(form, '/device/upload', pct => {
-      status.textContent = `Uploading ${file.name}... ${pct}%`;
-    });
-    if (data.ok) {
-      status.textContent = 'Uploaded!';
-      status.style.color = 'var(--success-border)';
-      loadDeviceTab();
-    } else {
-      status.textContent = data.error || 'Upload failed';
-      status.style.color = 'var(--danger)';
-    }
-  } catch(err) {
-    status.textContent = 'Upload failed';
-    status.style.color = 'var(--danger)';
-  }
-  e.target.value = '';
-});
 
 // Init
 loadExistingFiles();

@@ -9,3 +9,4 @@ logs/
 .claude/
 *.command
 reference/
+*.so

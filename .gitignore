@@ -8,3 +8,4 @@ input/
 reference/kindle_guided_view/*.png
 *_debug.jpg
 *_grouped.jpg
+*.so
