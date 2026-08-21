@@ -4,17 +4,17 @@ Converts comic book files (CBZ/CBR/CB7) into e-reader optimized formats: XTC for
 
 ## Status
 
-**Phase:** Full web app with multi-source manga download, volume selection, cloud storage management.
+**Phase:** Full web app with multi-source manga download, volume selection. Deployed at comic-converter.fly.dev.
 **Current:** Three-tab web UI at `http://localhost:8080`:
-- **Convert tab**: Drop files or pick from input/, select device(s), click Convert. Cancel button. Open input/output folder links. Download badge on files from manga sources.
-- **Download tab**: Three sources (MangaDex, MangaPill, 1manga). Per-volume selection with Select All, custom chapter range picker. Cancel button. Auto-convert option.
-- **Preview tab**: View converted EPUBs at exact device viewport (480x800 XTe Ink or 1072x1448 Kindle). Arrow key navigation.
-**Cloud storage**: Auto-cleanup of source CBZs after conversion in cloud mode. Download links for saving EPUBs to user's device. Delete-from-server button. Disk usage in settings.
+- **Convert tab**: Drop files or pick from input/, select device(s), choose dithering algorithm, click Convert. Cancel button. Open input/output folder links.
+- **Download tab**: Three sources (MangaDex, MangaPill, 1manga). Per-volume selection with Select All, custom chapter range picker. Cancel button. Download only (no auto-convert).
+- **Preview tab**: View converted EPUBs/XTCs at exact device viewport. Arrow key navigation.
 **Conversion modes:**
-- **XTe Ink**: Overlapping thirds (xtcjs algorithm) with gutter snapping, landscape rotation, Floyd-Steinberg dithering. Outputs XTC native format (1-bit packed, instant page turns on CrossPoint).
+- **XTe Ink**: Overlapping thirds (xtcjs algorithm) with gutter snapping, landscape rotation, 3 dithering options (Floyd-Steinberg/Sierra Lite/Atkinson). Native C dithering via ctypes. Outputs XTC native format (1-bit packed, instant page turns on CrossPoint).
 - **Kindle**: KCC for fixed-layout EPUB with virtual panel view.
-**Tested on:** Civil War collection (104 files), Amazing SpiderMan, Riddler, Sandman, Punpun, Chainsaw Man (MangaDex).
-**Next:** Cloud deployment (Railway/Fly.io), landscape-first mode.
+**Defaults:** Floyd-Steinberg dithering, continuous overlap OFF, landscape flip OFF.
+**Tested on:** Civil War collection (104 files), Amazing SpiderMan, Riddler, Sandman, Punpun, Chainsaw Man (MangaDex), Berserk.
+**Next:** Fork xtcjs (add gutter snapping + spread detection), port xtcjs live preview, tool separation (converter + downloader repos).
 
 ## Roadmap
 
@@ -34,19 +34,26 @@ Converts comic book files (CBZ/CBR/CB7) into e-reader optimized formats: XTC for
 14. [x] Cloud deployment (Fly.io) — live at comic-converter.fly.dev
 15. [x] Landscape-first mode — segments rotated 90° for landscape reading (xtcjs default)
 16. [x] Continuous scroll mode — uniform overlap across page boundaries (no jarring breaks)
-17. [x] Direct file upload to OPDS catalog — upload .epub/.xtc from computer to Vercel Blob
+17. [x] Direct file upload to OPDS catalog — moved to separate Vercel tool
 18. [x] XTC preview — decode and render XTG pages in Preview tab
-19. [ ] PDF input support
-20. [ ] Mihon chapter combining — merge downloaded chapter CBZs into volumes
+19. [x] Native C dithering — ctypes-loaded .so for Floyd-Steinberg/Sierra Lite/Atkinson (83x faster)
+20. [x] Pipeline decoupling — download and convert are independent operations
+21. [x] Removed Device/OPDS tab — handled by separate Vercel tool
+22. [ ] Fork xtcjs — add gutter snapping + spread detection (our preprocessing chain is better)
+23. [ ] Port xtcjs live preview into converter
+24. [ ] Tool separation — 2 repos: converter with preview, downloader
+25. [ ] PDF input support
+26. [ ] Mihon chapter combining — merge downloaded chapter CBZs into volumes
 
-## Overlapping Thirds — xtcjs Algorithm (split_page.py)
+## Overlapping Thirds — xtcjs Algorithm (xtc_pipeline.py)
 
 Replicates the [xtcjs](https://github.com/varo6/xtcjs) `calculateOverlapSegments()` with gutter snapping:
 
 1. **`calculate_overlap_segments(w, h)`** — xtcjs math: `scale = 800/w`, `segmentHeight = floor(480/scale)`, 3 overlapping segments (more only if overlap < 5%).
 2. **`snap_segments_to_gutters()`** — Adjusts segment start positions to nearest panel gutter within 15% of segment height.
-3. **`process_for_eink()`** — Rotate 90° (landscape), grayscale, autocontrast, sharpen, resize to 480x800, Floyd-Steinberg dither.
-4. Panel detection (`find_panel_rows`, `find_gutter_centers`) only used for snapping; skipped for manga.
+3. **`process_for_eink()`** — Rotate 90° (landscape), grayscale, autocontrast, sharpen, resize to 480x800, dither.
+4. **Dithering** — Native C implementations via ctypes (`dither_native.c` → `.so`). Floyd-Steinberg (balanced), Sierra Lite (sharper), Atkinson (high contrast). Serpentine scanning, ±96 error clamping. Python fallback if .so missing.
+5. Panel detection (`find_panel_rows`, `find_gutter_centers`) only used for snapping; skipped for manga.
 
 ## Manga Sources
 
@@ -94,15 +101,18 @@ Three download sources available via the Download tab:
 - MangaDex rate limit is 5 req/sec — downloads sleep 0.15s between pages
 - Panel detection parallelized via subprocesses (not threads — OpenCV holds GIL, fork deadlocks on macOS)
 - Cloud mode auto-deletes source CBZs after conversion to avoid filling Fly.io volume (1 GB default)
+- `cc` may be aliased to `claude` on dev machines — use `/usr/bin/gcc` explicitly when compiling dither_native.c
+- dither_native.so is architecture-specific — excluded from git and Docker context, compiled during Docker build
 
 ## File Map
 
 - `CLAUDE.md` — this file
-- `src/web_app.py` — Flask web app: convert, MangaDex download, EPUB preview (the primary interface)
+- `src/web_app.py` — Flask web app: convert, download, preview (the primary interface)
+- `src/xtc_pipeline.py` — XTe Ink conversion pipeline: overlapping thirds, preprocessing, native C dithering
+- `src/dither_native.c` — C implementations of Floyd-Steinberg/Sierra Lite/Atkinson dithering (compiled to .so)
 - `src/mangadex.py` — MangaDex API wrapper (search, volumes, download as CBZ)
 - `src/mangapill.py` — MangaPill scraper (largest English library)
 - `src/onemanga.py` — 1manga.co scraper (sequential CDN images)
-- `src/split_page.py` — panel-aware overlapping thirds splitter + e-ink optimization
 - `src/convert.py` — CLI entry point, dual-path: `--device kindle|xteink`
 - `src/extract.py` — extracts pages from CBZ/CBR/CB7, parses ComicInfo.xml
 - `src/detect_panels.py` — panel detection + grouping
@@ -110,9 +120,8 @@ Three download sources available via the Download tab:
 - `src/kumiko/` — Kumiko library patched for OpenCV 5.0
 - `src/build_epub.py` — view-per-page EPUB builder with viewport, cover, rotation (Kindle path)
 - `src/build_xtc.py` — XTG/XTC format builder for XTe Ink (1-bit packed pages, native CrossPoint format)
-- `src/templates/index.html` — web UI (tabs: Convert, MangaDex, Preview)
+- `src/templates/index.html` — web UI (tabs: Convert, Download, Preview)
 - `src/static/` — PWA icons (icon-192.png, icon-512.png)
-- `src/preview.py` — legacy HTML preview at device dimensions
 - `scripts/analyze_orientation.py` — profiles comics by landscape vs portrait ratio
 - `commands/Launch Converter.command` — starts web UI in browser
 - `commands/Install Auto-Start.command` — sets up launchd for always-on at localhost:8080
