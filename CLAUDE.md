@@ -14,7 +14,13 @@ Converts comic book files (CBZ/CBR/CB7) into e-reader optimized formats: XTC for
 - **Kindle**: KCC for fixed-layout EPUB with virtual panel view.
 **Defaults:** Floyd-Steinberg dithering, gamma 1.0, contrast Normal, sharpen Normal, denoise OFF, continuous overlap OFF, landscape flip OFF.
 **Tested on:** Civil War collection (104 files), Amazing SpiderMan, Riddler, Sandman, Punpun, Chainsaw Man (MangaDex), Berserk.
-**Next:** Settings analyzer (standalone tool to profile diverse manga and discover optimal presets), live preview, tool separation.
+**Known issue:** Downloads on Fly.io fill the 1GB volume and freeze the tool. Need auto-cleanup for download-only workflows (conversion path already auto-deletes).
+**Next:**
+1. Fix Fly.io download storage cleanup (BLOCKER for test corpus downloads)
+2. Download remaining test corpus manga (A Silent Voice, Spy x Family, Vinland Saga, Blame!, Dragon Ball, others — see memory)
+3. Contribute gutter snapping + spread detection to xtcjs as PRs (fork exists at terriblyoffendedmarketer-stack/xtcjs)
+4. Settings analyzer (standalone tool to profile diverse manga and discover optimal presets)
+5. Live preview, tool separation
 
 ## Roadmap
 
