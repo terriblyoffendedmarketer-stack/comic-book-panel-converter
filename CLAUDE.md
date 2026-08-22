@@ -14,7 +14,7 @@ Converts comic book files (CBZ/CBR/CB7) into e-reader optimized formats: XTC for
 - **Kindle**: KCC for fixed-layout EPUB with virtual panel view.
 **Defaults:** Floyd-Steinberg dithering, gamma 1.0, contrast Normal, sharpen Normal, denoise OFF, continuous overlap OFF, landscape flip OFF.
 **Tested on:** Civil War collection (104 files), Amazing SpiderMan, Riddler, Sandman, Punpun, Chainsaw Man (MangaDex), Berserk.
-**Next:** Settings analyzer (standalone tool to profile diverse manga and discover optimal presets), then fork xtcjs, port live preview, tool separation.
+**Next:** Settings analyzer (standalone tool to profile diverse manga and discover optimal presets), live preview, tool separation.
 
 ## Roadmap
 
@@ -41,11 +41,10 @@ Converts comic book files (CBZ/CBR/CB7) into e-reader optimized formats: XTC for
 21. [x] Removed Device/OPDS tab — handled by separate Vercel tool
 22. [x] Advanced controls — gamma, contrast, sharpening, denoise under collapsible Advanced section
 23. [ ] Settings analyzer — standalone tool to profile diverse manga/comics and discover optimal presets
-24. [ ] Fork xtcjs — add gutter snapping + spread detection (our preprocessing chain is better)
-25. [ ] Port xtcjs live preview into converter
-26. [ ] Tool separation — 2 repos: converter with preview, downloader
-27. [ ] PDF input support
-28. [ ] Mihon chapter combining — merge downloaded chapter CBZs into volumes
+24. [ ] Live preview — real-time preview of conversion settings before full processing
+25. [ ] Tool separation — 2 repos: converter with preview, downloader
+26. [ ] PDF input support
+27. [ ] Mihon chapter combining — merge downloaded chapter CBZs into volumes
 
 ## Overlapping Thirds — xtcjs Algorithm (xtc_pipeline.py)
 
