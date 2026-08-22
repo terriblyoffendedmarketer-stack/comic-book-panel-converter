@@ -348,6 +348,59 @@
       <label style="margin-right:12px" title="Faster diffusion, slightly sharper. Good for detailed line art and text-heavy pages."><input type="radio" name="dither" value="sierra-lite"> Sierra Lite <span style="font-size:10px;color:var(--muted)">(sharper)</span></label>
       <label title="Preserves contrast, less mid-tone noise. Best for color comics with flat shading."><input type="radio" name="dither" value="atkinson"> Atkinson <span style="font-size:10px;color:var(--muted)">(high contrast)</span></label>
     </div>
+
+    <div style="margin-top:8px; border-top:1px solid var(--border); padding-top:8px;">
+      <a id="advancedToggle" style="color:var(--accent); cursor:pointer; font-size:12px; user-select:none;">Advanced options &#9654;</a>
+      <div id="advancedOptions" style="display:none; margin-top:8px;">
+
+        <div style="margin-bottom:8px;">
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:2px;">
+            <span style="min-width:70px">Gamma</span>
+            <input type="range" id="optGamma" min="0.5" max="2.0" step="0.1" value="1.0" style="flex:1; accent-color:var(--accent);">
+            <span id="optGammaVal" style="min-width:28px; text-align:right; font-size:12px; color:var(--muted)">1.0</span>
+            <a id="optGammaReset" style="font-size:11px; color:var(--accent); cursor:pointer; display:none">reset</a>
+          </div>
+          <div style="font-size:10px; color:var(--muted); padding-left:78px;">Adjusts mid-tone brightness. Higher = brighter mid-tones <span style="font-size:9px">(good for dark manga like Berserk)</span>. Lower = darker <span style="font-size:9px">(good for washed-out scans)</span>. Default: 1.0</div>
+        </div>
+
+        <div style="margin-bottom:8px;">
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:2px;">
+            <span style="min-width:70px">Contrast</span>
+            <select id="optContrast" style="flex:1; padding:3px 6px; border:1px solid var(--border); border-radius:4px; background:var(--card); color:var(--text); font-size:12px;">
+              <option value="0">Off</option>
+              <option value="0.5">Light — subtle stretch, preserves detail</option>
+              <option value="1" selected>Normal — good all-rounder (default)</option>
+              <option value="1.5">Strong — punchy blacks, brighter whites</option>
+              <option value="2">Max — extreme, may clip detail</option>
+            </select>
+          </div>
+          <div style="font-size:10px; color:var(--muted); padding-left:78px;">How aggressively to stretch the tonal range. Increase for flat/washed-out pages, decrease for already high-contrast art.</div>
+        </div>
+
+        <div style="margin-bottom:8px;">
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:2px;">
+            <span style="min-width:70px">Sharpening</span>
+            <select id="optSharpen" style="flex:1; padding:3px 6px; border:1px solid var(--border); border-radius:4px; background:var(--card); color:var(--text); font-size:12px;">
+              <option value="0">Off — no sharpening</option>
+              <option value="0.3">Light — gentle, for noisy scans</option>
+              <option value="0.7" selected>Normal — balanced clarity (default)</option>
+              <option value="1.2">Strong — crisp lines, may amplify grain</option>
+            </select>
+          </div>
+          <div style="font-size:10px; color:var(--muted); padding-left:78px;">Edge enhancement before dithering. Reduce for grainy/noisy sources, increase for blurry low-res scans.</div>
+        </div>
+
+        <div>
+          <label style="display:flex; align-items:center; gap:8px;">
+            <span style="min-width:70px">Denoise</span>
+            <input type="checkbox" id="optDenoise">
+            <span>Clean up grain/noise before dithering</span>
+          </label>
+          <div style="font-size:10px; color:var(--muted); padding-left:78px; margin-top:2px;">Median filter that removes JPEG artifacts and scan noise. Use for low-quality rips only — off by default since it softens clean art.</div>
+        </div>
+
+      </div>
+    </div>
   </div>
 
   <div class="existing-files">
@@ -698,6 +751,29 @@ document.getElementById('devXteink').addEventListener('change', () => {
   document.getElementById('xteinkOptions').style.display = document.getElementById('devXteink').checked ? 'block' : 'none';
 });
 document.getElementById('devKindle').addEventListener('change', updateConvertBtn);
+
+// Advanced options toggle
+const advToggle = document.getElementById('advancedToggle');
+const advPanel = document.getElementById('advancedOptions');
+advToggle.addEventListener('click', () => {
+  const open = advPanel.style.display !== 'none';
+  advPanel.style.display = open ? 'none' : 'block';
+  advToggle.innerHTML = open ? 'Advanced options &#9654;' : 'Advanced options &#9660;';
+});
+
+// Gamma slider
+const gammaSlider = document.getElementById('optGamma');
+const gammaVal = document.getElementById('optGammaVal');
+const gammaReset = document.getElementById('optGammaReset');
+gammaSlider.addEventListener('input', () => {
+  gammaVal.textContent = parseFloat(gammaSlider.value).toFixed(1);
+  gammaReset.style.display = gammaSlider.value !== '1' ? 'inline' : 'none';
+});
+gammaReset.addEventListener('click', () => {
+  gammaSlider.value = '1';
+  gammaVal.textContent = '1.0';
+  gammaReset.style.display = 'none';
+});
 document.getElementById('selectAll').addEventListener('click', () => setAllConvertFiles(true));
 document.getElementById('selectNone').addEventListener('click', () => setAllConvertFiles(false));
 document.getElementById('deleteAll').addEventListener('click', async () => {
@@ -740,7 +816,7 @@ convertBtn.addEventListener('click', async () => {
       const res = await fetch('/convert', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filename, devices, continuous: document.getElementById('optContinuous').checked, rotate_cw: document.getElementById('optRotateCw').checked, dither: document.querySelector('input[name="dither"]:checked').value })
+        body: JSON.stringify({ filename, devices, continuous: document.getElementById('optContinuous').checked, rotate_cw: document.getElementById('optRotateCw').checked, dither: document.querySelector('input[name="dither"]:checked').value, gamma: parseFloat(document.getElementById('optGamma').value), contrast: parseFloat(document.getElementById('optContrast').value), sharpen: parseFloat(document.getElementById('optSharpen').value), denoise: document.getElementById('optDenoise').checked })
       });
       const { job_id, error } = await res.json();
       if (error) { addLogEntry(progressLog, error); continue; }

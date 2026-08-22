@@ -124,6 +124,22 @@ def apply_contrast(gray, level=1):
     return np.clip(result, 0, 255)
 
 
+def apply_gamma(gray, gamma=1.0):
+    """Apply gamma correction. >1.0 brightens mid-tones, <1.0 darkens them."""
+    if gamma == 1.0:
+        return gray
+    normalized = np.clip(gray, 0, 255) / 255.0
+    corrected = np.power(normalized, 1.0 / gamma) * 255.0
+    return corrected
+
+
+def denoise_median(gray, size=3):
+    """Apply median filter to reduce noise/grain before dithering."""
+    img = Image.fromarray(np.clip(gray, 0, 255).astype(np.uint8), mode='L')
+    filtered = img.filter(ImageFilter.MedianFilter(size=size))
+    return np.array(filtered, dtype=np.float32)
+
+
 def find_content_bounds(gray, white_threshold=245):
     """Find tight bounds around non-white content. Returns (x, y, w, h) or None."""
     mask = gray < white_threshold
@@ -458,7 +474,7 @@ def _dither_error_diffusion(pixels, width, height, algorithm):
     return pixels
 
 
-def dither(gray, algorithm='floyd'):
+def dither(gray, algorithm='floyd', sharpen=0.7):
     """Apply dithering to a float32 grayscale array. Returns uint8 1-bit result.
 
     Uses native C implementations when available (~3ms/page for all algorithms).
@@ -467,7 +483,7 @@ def dither(gray, algorithm='floyd'):
     height, width = gray.shape
     pixels = gray.copy()
 
-    pixels = _sharpen_luminance(pixels, width, height, amount=0.7)
+    pixels = _sharpen_luminance(pixels, width, height, amount=sharpen)
 
     if algorithm == 'none':
         return (np.where(pixels >= 128, 255, 0)).astype(np.uint8)
@@ -512,14 +528,18 @@ def resize_with_padding(img, target_w=TARGET_WIDTH, target_h=TARGET_HEIGHT, pad_
 
 
 def process_page(img, rotate_cw=False, contrast_level=1, trim_content=True,
-                 dither_algo='floyd', target_w=TARGET_WIDTH, target_h=TARGET_HEIGHT):
+                 dither_algo='floyd', target_w=TARGET_WIDTH, target_h=TARGET_HEIGHT,
+                 gamma=1.0, sharpen=0.7, denoise=False):
     """Full xtcjs processing pipeline for a single segment/page.
 
-    Pipeline: grayscale → content trim → contrast → rotate → resize → dither.
+    Pipeline: grayscale → denoise → content trim → contrast → gamma → rotate → resize → dither.
 
     Returns a PIL Image ready for XTG encoding.
     """
     gray = to_grayscale(img)
+
+    if denoise:
+        gray = denoise_median(gray)
 
     if trim_content:
         bounds = find_content_bounds(gray)
@@ -531,24 +551,29 @@ def process_page(img, rotate_cw=False, contrast_level=1, trim_content=True,
     if contrast_level > 0:
         gray = apply_contrast(gray, contrast_level)
 
+    gray = apply_gamma(gray, gamma)
+
     pil_gray = Image.fromarray(np.clip(gray, 0, 255).astype(np.uint8), mode='L')
 
-    # Rotate landscape segments for landscape reading
     if pil_gray.width > pil_gray.height:
         pil_gray = pil_gray.transpose(Image.ROTATE_270 if rotate_cw else Image.ROTATE_90)
 
     pil_gray = resize_with_padding(pil_gray, target_w, target_h)
 
     gray_arr = np.array(pil_gray, dtype=np.float32)
-    dithered = dither(gray_arr, algorithm=dither_algo)
+    dithered = dither(gray_arr, algorithm=dither_algo, sharpen=sharpen)
 
     return Image.fromarray(dithered, mode='L')
 
 
 def process_cover(img, contrast_level=1, dither_algo='floyd',
-                  target_w=TARGET_WIDTH, target_h=TARGET_HEIGHT):
+                  target_w=TARGET_WIDTH, target_h=TARGET_HEIGHT,
+                  gamma=1.0, sharpen=0.7, denoise=False):
     """Process cover image — no splitting, no rotation, portrait always."""
     gray = to_grayscale(img)
+
+    if denoise:
+        gray = denoise_median(gray)
 
     bounds = find_content_bounds(gray)
     if bounds:
@@ -559,10 +584,12 @@ def process_cover(img, contrast_level=1, dither_algo='floyd',
     if contrast_level > 0:
         gray = apply_contrast(gray, contrast_level)
 
+    gray = apply_gamma(gray, gamma)
+
     pil_gray = Image.fromarray(np.clip(gray, 0, 255).astype(np.uint8), mode='L')
     pil_gray = resize_with_padding(pil_gray, target_w, target_h)
 
     gray_arr = np.array(pil_gray, dtype=np.float32)
-    dithered = dither(gray_arr, algorithm=dither_algo)
+    dithered = dither(gray_arr, algorithm=dither_algo, sharpen=sharpen)
 
     return Image.fromarray(dithered, mode='L')

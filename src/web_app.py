@@ -111,7 +111,7 @@ def detect_panels_parallel(pages, manga):
     return all_panels
 
 
-def convert_xteink_thirds(comic_path, manga, title, progress, is_cancelled=None, continuous=False, rotate_cw=False, dither_algo='floyd'):
+def convert_xteink_thirds(comic_path, manga, title, progress, is_cancelled=None, continuous=False, rotate_cw=False, dither_algo='floyd', gamma=1.0, contrast=1, sharpen=0.7, denoise=False):
     """Convert for XTe Ink using overlapping thirds + XTC native format."""
     device = DEVICE_PROFILES['xteink']
     tw, th = device['width'], device['height']
@@ -136,7 +136,7 @@ def convert_xteink_thirds(comic_path, manga, title, progress, is_cancelled=None,
         xtg_pages = []
 
         cover_img = Image.open(pages[0])
-        cover = process_cover(cover_img, dither_algo=dither_algo, target_w=tw, target_h=th)
+        cover = process_cover(cover_img, dither_algo=dither_algo, target_w=tw, target_h=th, gamma=gamma, contrast_level=contrast, sharpen=sharpen, denoise=denoise)
         xtg_pages.append(image_to_xtg(cover))
 
         content_pages = pages[1:]
@@ -174,7 +174,7 @@ def convert_xteink_thirds(comic_path, manga, title, progress, is_cancelled=None,
                     composite.paste(img2.crop((0, 0, w, h2)), (0, h1))
                     img = composite
 
-                processed = process_page(img, rotate_cw=rotate_cw, dither_algo=dither_algo, target_w=tw, target_h=th)
+                processed = process_page(img, rotate_cw=rotate_cw, dither_algo=dither_algo, target_w=tw, target_h=th, gamma=gamma, contrast_level=contrast, sharpen=sharpen, denoise=denoise)
                 xtg_pages.append(image_to_xtg(processed))
         else:
             skip_detection = manga or total_pages > 100
@@ -195,7 +195,7 @@ def convert_xteink_thirds(comic_path, manga, title, progress, is_cancelled=None,
 
                 for rx, ry, rw, rh in regions:
                     crop = img.crop((rx, ry, rx + rw, ry + rh))
-                    processed = process_page(crop, rotate_cw=rotate_cw, dither_algo=dither_algo, target_w=tw, target_h=th)
+                    processed = process_page(crop, rotate_cw=rotate_cw, dither_algo=dither_algo, target_w=tw, target_h=th, gamma=gamma, contrast_level=contrast, sharpen=sharpen, denoise=denoise)
                     xtg_pages.append(image_to_xtg(processed))
 
         progress("Building XTC...")
@@ -247,7 +247,7 @@ def convert_kindle(comic_path, manga, title, progress):
         return None
 
 
-def run_conversion(job_id, filepath, devices, continuous=False, rotate_cw=False, dither_algo='floyd'):
+def run_conversion(job_id, filepath, devices, continuous=False, rotate_cw=False, dither_algo='floyd', gamma=1.0, contrast=1, sharpen=0.7, denoise=False):
     """Run conversion in background thread."""
     job = jobs[job_id]
 
@@ -271,7 +271,7 @@ def run_conversion(job_id, filepath, devices, continuous=False, rotate_cw=False,
             return
 
         if 'xteink' in devices:
-            path = convert_xteink_thirds(comic_path, manga, title, progress, is_cancelled, continuous=continuous, rotate_cw=rotate_cw, dither_algo=dither_algo)
+            path = convert_xteink_thirds(comic_path, manga, title, progress, is_cancelled, continuous=continuous, rotate_cw=rotate_cw, dither_algo=dither_algo, gamma=gamma, contrast=contrast, sharpen=sharpen, denoise=denoise)
             if is_cancelled():
                 return
             if path:
@@ -432,6 +432,10 @@ def start_convert():
     continuous = data.get('continuous', False)
     rotate_cw = data.get('rotate_cw', False)
     dither_algo = data.get('dither', 'floyd')
+    gamma = float(data.get('gamma', 1.0))
+    contrast = int(data.get('contrast', 1))
+    sharpen = float(data.get('sharpen', 0.7))
+    denoise = data.get('denoise', False)
 
     if not filename:
         return jsonify({'error': 'No file specified'}), 400
@@ -456,7 +460,7 @@ def start_convert():
         'filename': filename,
     }
 
-    thread = threading.Thread(target=run_conversion, args=(job_id, filepath, devices, continuous, rotate_cw, dither_algo))
+    thread = threading.Thread(target=run_conversion, args=(job_id, filepath, devices, continuous, rotate_cw, dither_algo, gamma, contrast, sharpen, denoise))
     thread.daemon = True
     thread.start()
 
