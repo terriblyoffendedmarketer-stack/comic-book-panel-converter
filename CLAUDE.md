@@ -6,15 +6,15 @@ Converts comic book files (CBZ/CBR/CB7) into e-reader optimized formats: XTC for
 
 **Phase:** Full web app with multi-source manga download, volume selection. Deployed at comic-converter.fly.dev.
 **Current:** Three-tab web UI at `http://localhost:8080`:
-- **Convert tab**: Drop files or pick from input/, select device(s), choose dithering algorithm, click Convert. Cancel button. Open input/output folder links.
+- **Convert tab**: Drop files or pick from input/, select device(s), choose dithering algorithm, click Convert. Collapsible Advanced section with gamma, contrast, sharpening, denoise controls. Cancel button. Open input/output folder links.
 - **Download tab**: Three sources (MangaDex, MangaPill, 1manga). Per-volume selection with Select All, custom chapter range picker. Cancel button. Download only (no auto-convert).
 - **Preview tab**: View converted EPUBs/XTCs at exact device viewport. Arrow key navigation.
 **Conversion modes:**
 - **XTe Ink**: Overlapping thirds (xtcjs algorithm) with gutter snapping, landscape rotation, 3 dithering options (Floyd-Steinberg/Sierra Lite/Atkinson). Native C dithering via ctypes. Outputs XTC native format (1-bit packed, instant page turns on CrossPoint).
 - **Kindle**: KCC for fixed-layout EPUB with virtual panel view.
-**Defaults:** Floyd-Steinberg dithering, continuous overlap OFF, landscape flip OFF.
+**Defaults:** Floyd-Steinberg dithering, gamma 1.0, contrast Normal, sharpen Normal, denoise OFF, continuous overlap OFF, landscape flip OFF.
 **Tested on:** Civil War collection (104 files), Amazing SpiderMan, Riddler, Sandman, Punpun, Chainsaw Man (MangaDex), Berserk.
-**Next:** Fork xtcjs (add gutter snapping + spread detection), port xtcjs live preview, tool separation (converter + downloader repos).
+**Next:** Settings analyzer (standalone tool to profile diverse manga and discover optimal presets), then fork xtcjs, port live preview, tool separation.
 
 ## Roadmap
 
@@ -39,11 +39,13 @@ Converts comic book files (CBZ/CBR/CB7) into e-reader optimized formats: XTC for
 19. [x] Native C dithering — ctypes-loaded .so for Floyd-Steinberg/Sierra Lite/Atkinson (83x faster)
 20. [x] Pipeline decoupling — download and convert are independent operations
 21. [x] Removed Device/OPDS tab — handled by separate Vercel tool
-22. [ ] Fork xtcjs — add gutter snapping + spread detection (our preprocessing chain is better)
-23. [ ] Port xtcjs live preview into converter
-24. [ ] Tool separation — 2 repos: converter with preview, downloader
-25. [ ] PDF input support
-26. [ ] Mihon chapter combining — merge downloaded chapter CBZs into volumes
+22. [x] Advanced controls — gamma, contrast, sharpening, denoise under collapsible Advanced section
+23. [ ] Settings analyzer — standalone tool to profile diverse manga/comics and discover optimal presets
+24. [ ] Fork xtcjs — add gutter snapping + spread detection (our preprocessing chain is better)
+25. [ ] Port xtcjs live preview into converter
+26. [ ] Tool separation — 2 repos: converter with preview, downloader
+27. [ ] PDF input support
+28. [ ] Mihon chapter combining — merge downloaded chapter CBZs into volumes
 
 ## Overlapping Thirds — xtcjs Algorithm (xtc_pipeline.py)
 
@@ -51,7 +53,7 @@ Replicates the [xtcjs](https://github.com/varo6/xtcjs) `calculateOverlapSegments
 
 1. **`calculate_overlap_segments(w, h)`** — xtcjs math: `scale = 800/w`, `segmentHeight = floor(480/scale)`, 3 overlapping segments (more only if overlap < 5%).
 2. **`snap_segments_to_gutters()`** — Adjusts segment start positions to nearest panel gutter within 15% of segment height.
-3. **`process_for_eink()`** — Rotate 90° (landscape), grayscale, autocontrast, sharpen, resize to 480x800, dither.
+3. **`process_page()`** — Full pipeline: grayscale → denoise (optional) → content trim → contrast → gamma → rotate → resize → sharpen → dither. All params configurable via Advanced UI.
 4. **Dithering** — Native C implementations via ctypes (`dither_native.c` → `.so`). Floyd-Steinberg (balanced), Sierra Lite (sharper), Atkinson (high contrast). Serpentine scanning, ±96 error clamping. Python fallback if .so missing.
 5. Panel detection (`find_panel_rows`, `find_gutter_centers`) only used for snapping; skipped for manga.
 
