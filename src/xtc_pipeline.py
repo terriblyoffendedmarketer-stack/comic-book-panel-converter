@@ -527,8 +527,8 @@ def resize_with_padding(img, target_w=TARGET_WIDTH, target_h=TARGET_HEIGHT, pad_
     return result
 
 
-def process_page(img, rotate_cw=False, contrast_level=1, trim_content=True,
-                 dither_algo='floyd', target_w=TARGET_WIDTH, target_h=TARGET_HEIGHT,
+def process_page(img, rotate_cw=False, contrast_level=2, trim_content=True,
+                 dither_algo='atkinson', target_w=TARGET_WIDTH, target_h=TARGET_HEIGHT,
                  gamma=1.0, sharpen=0.7, denoise=False):
     """Full xtcjs processing pipeline for a single segment/page.
 
@@ -566,7 +566,7 @@ def process_page(img, rotate_cw=False, contrast_level=1, trim_content=True,
     return Image.fromarray(dithered, mode='L')
 
 
-def process_cover(img, contrast_level=1, dither_algo='floyd',
+def process_cover(img, contrast_level=2, dither_algo='atkinson',
                   target_w=TARGET_WIDTH, target_h=TARGET_HEIGHT,
                   gamma=1.0, sharpen=0.7, denoise=False):
     """Process cover image — no splitting, no rotation, portrait always."""

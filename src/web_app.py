@@ -160,7 +160,7 @@ def detect_panels_parallel(pages, manga):
     return all_panels
 
 
-def convert_xteink_thirds(comic_path, manga, title, progress, is_cancelled=None, continuous=False, rotate_cw=False, dither_algo='floyd', gamma=1.0, contrast=1, sharpen=0.7, denoise=False):
+def convert_xteink_thirds(comic_path, manga, title, progress, is_cancelled=None, continuous=False, rotate_cw=False, dither_algo='atkinson', gamma=1.0, contrast=2, sharpen=0.7, denoise=False):
     """Convert for XTe Ink using overlapping thirds + XTC native format."""
     device = DEVICE_PROFILES['xteink']
     tw, th = device['width'], device['height']
@@ -296,7 +296,7 @@ def convert_kindle(comic_path, manga, title, progress):
         return None
 
 
-def run_conversion(job_id, filepath, devices, continuous=False, rotate_cw=False, dither_algo='floyd', gamma=1.0, contrast=1, sharpen=0.7, denoise=False):
+def run_conversion(job_id, filepath, devices, continuous=False, rotate_cw=False, dither_algo='atkinson', gamma=1.0, contrast=2, sharpen=0.7, denoise=False):
     """Run conversion in background thread."""
     job = jobs[job_id]
 
@@ -496,9 +496,9 @@ def start_convert():
     devices = data.get('devices', ['xteink'])
     continuous = data.get('continuous', False)
     rotate_cw = data.get('rotate_cw', False)
-    dither_algo = data.get('dither', 'floyd')
+    dither_algo = data.get('dither', 'atkinson')
     gamma = float(data.get('gamma', 1.0))
-    contrast = int(data.get('contrast', 1))
+    contrast = int(data.get('contrast', 2))
     sharpen = float(data.get('sharpen', 0.7))
     denoise = data.get('denoise', False)
 

@@ -12,7 +12,7 @@ Converts comic book files (CBZ/CBR/CB7) into e-reader optimized formats: XTC for
 **Conversion modes:**
 - **XTe Ink**: Overlapping thirds (xtcjs algorithm) with gutter snapping, landscape rotation, 3 dithering options (Floyd-Steinberg/Sierra Lite/Atkinson). Native C dithering via ctypes. Outputs XTC native format (1-bit packed, instant page turns on CrossPoint).
 - **Kindle**: KCC for fixed-layout EPUB with virtual panel view.
-**Defaults:** Floyd-Steinberg dithering, gamma 1.0, contrast Normal, sharpen Normal, denoise OFF, continuous overlap OFF, landscape flip OFF.
+**Defaults:** Atkinson dithering (benchmark winner for 10/16 titles), gamma 1.0, contrast Normal (level 2), sharpen Normal (0.7), denoise OFF, continuous overlap OFF, landscape flip OFF. Floyd-Steinberg better for painted/color art (Sandman, Chainsaw Man).
 **Tested on:** Civil War collection (104 files), Amazing SpiderMan, Riddler, Sandman, Punpun, Chainsaw Man (MangaDex), Berserk.
 **Storage:** Auto-cleanup system manages the 1GB Fly.io volume. Startup cleanup frees space if <150MB. Downloads auto-delete from server 5 min after user saves them. Space checked before each download; oldest files pruned if tight. Download queue lets you search and add multiple manga without blocking.
 **Next:**
@@ -129,6 +129,7 @@ Three download sources available via the Download tab:
 - `src/templates/index.html` — web UI (tabs: Convert, Download, Preview)
 - `src/static/` — PWA icons (icon-192.png, icon-512.png)
 - `scripts/analyze_orientation.py` — profiles comics by landscape vs portrait ratio
+- `scripts/benchmark.py` — parameter sweep across test corpus: math metrics (SSIM, entropy, edge density, histogram) for all dither/gamma/contrast/sharpen combos
 - `commands/Launch Converter.command` — starts web UI in browser
 - `commands/Install Auto-Start.command` — sets up launchd for always-on at localhost:8080
 - `commands/Uninstall Auto-Start.command` — removes launchd service
