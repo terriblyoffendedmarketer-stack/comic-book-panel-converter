@@ -315,6 +315,7 @@
     <div class="setting-group" id="diskUsageGroup" style="display:none">
       <div style="font-size:13px; font-weight:500; margin-bottom:6px">Server Storage</div>
       <div id="diskUsageInfo" style="font-size:12px; color:var(--muted)">Loading...</div>
+      <button id="flushStorageBtn" style="margin-top:8px; padding:5px 14px; font-size:12px; background:none; border:1px solid var(--danger); color:var(--danger); border-radius:5px; cursor:pointer;">Clear all server files</button>
     </div>
     <button class="settings-close" id="settingsClose">Done</button>
   </div>
@@ -542,7 +543,29 @@ settingUnfiltered.addEventListener('change', () => {
 
 function isUnfiltered() { return settingUnfiltered.checked; }
 
-if (CLOUD) document.getElementById('diskUsageGroup').style.display = 'block';
+if (CLOUD) {
+  document.getElementById('diskUsageGroup').style.display = 'block';
+  document.getElementById('flushStorageBtn').addEventListener('click', async () => {
+    if (!confirm('Delete ALL files from the server (input + output)?')) return;
+    const btn = document.getElementById('flushStorageBtn');
+    btn.textContent = 'Clearing...';
+    btn.disabled = true;
+    try {
+      const res = await fetch('/flush-storage', { method: 'POST' });
+      const d = await res.json();
+      btn.textContent = `Cleared ${d.deleted} files`;
+      btn.style.borderColor = 'var(--success-border)';
+      btn.style.color = 'var(--success-text)';
+      loadDiskUsage();
+      loadExistingFiles();
+      loadOutputFiles();
+      setTimeout(() => { btn.textContent = 'Clear all server files'; btn.style.borderColor = ''; btn.style.color = ''; btn.disabled = false; }, 3000);
+    } catch(e) {
+      btn.textContent = 'Failed';
+      setTimeout(() => { btn.textContent = 'Clear all server files'; btn.disabled = false; }, 2000);
+    }
+  });
+}
 async function loadDiskUsage() {
   try {
     const res = await fetch('/disk-usage');
@@ -1052,57 +1075,78 @@ document.getElementById('mdRangeAddBtn').addEventListener('click', () => {
   document.getElementById('mdRangeTo').value = '';
 });
 
-document.getElementById('mdDownloadBtn').addEventListener('click', async () => {
+let dlQueue = [];
+let dlRunning = false;
+
+document.getElementById('mdDownloadBtn').addEventListener('click', () => {
   if (!selectedManga || selectedVolumes.size === 0) return;
 
-  const btn = document.getElementById('mdDownloadBtn');
-  btn.disabled = true;
+  dlQueue.push({
+    source: selectedManga._source || 'mangadex',
+    manga_id: selectedManga.id,
+    manga_title: selectedManga.title,
+    manga_slug: selectedManga.slug || '',
+    volumes: [...selectedVolumes],
+  });
 
+  selectedVolumes.clear();
+  document.querySelectorAll('#mdVolumeList input[type="checkbox"]').forEach(cb => cb.checked = false);
+  updateMdDownloadBtn();
+
+  if (!dlRunning) runDownloadQueue();
+});
+
+async function runDownloadQueue() {
+  dlRunning = true;
   const progressBox = document.getElementById('mdProgress');
   const progressText = document.getElementById('mdProgressText');
   const progressLog = document.getElementById('mdLog');
   const resultsBox = document.getElementById('mdResultsBox');
+  const errorBox = document.getElementById('mdError');
 
   progressBox.style.display = 'block';
-  resultsBox.style.display = 'none';
-  resultsBox.innerHTML = '';
-  progressLog.innerHTML = '';
-  progressText.textContent = 'Starting download...';
 
-  try {
-    const source = selectedManga._source || 'mangadex';
-    const endpoint = source === 'mangadex' ? '/mangadex/download' : '/source/download';
-    const payload = {
-      manga_id: selectedManga.id,
-      manga_title: selectedManga.title,
-      manga_slug: selectedManga.slug || '',
-      volumes: [...selectedVolumes],
-    };
-    if (source !== 'mangadex') payload.source = source;
+  while (dlQueue.length > 0) {
+    const item = dlQueue.shift();
+    const queueNote = dlQueue.length > 0 ? ` (${dlQueue.length} more queued)` : '';
+    progressText.textContent = `Downloading ${item.manga_title}...${queueNote}`;
+    progressLog.innerHTML = '';
+    errorBox.textContent = '';
 
-    const res = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    const { job_id, error } = await res.json();
-    if (error) { document.getElementById('mdError').textContent = error; progressBox.style.display = 'none'; btn.disabled = false; return; }
+    try {
+      const endpoint = item.source === 'mangadex' ? '/mangadex/download' : '/source/download';
+      const payload = {
+        manga_id: item.manga_id,
+        manga_title: item.manga_title,
+        manga_slug: item.manga_slug,
+        volumes: item.volumes,
+      };
+      if (item.source !== 'mangadex') payload.source = item.source;
 
-    const results = await pollJob(job_id, progressText, progressLog);
-    progressBox.style.display = 'none';
-    await showResults(resultsBox, results);
-  } catch (e) {
-    document.getElementById('mdError').textContent = 'Download failed: ' + e.message;
-    progressBox.style.display = 'none';
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const { job_id, error } = await res.json();
+      if (error) { errorBox.textContent = error; continue; }
+
+      const results = await pollJob(job_id, progressText, progressLog);
+      await showResults(resultsBox, results);
+    } catch (e) {
+      errorBox.textContent = 'Download failed: ' + e.message;
+    }
   }
 
-  btn.disabled = false;
-});
+  progressBox.style.display = 'none';
+  dlRunning = false;
+}
 
 document.getElementById('mdCancelBtn').addEventListener('click', async () => {
+  dlQueue = [];
   await cancelActiveJob();
   document.getElementById('mdProgress').style.display = 'none';
-  document.getElementById('mdDownloadBtn').disabled = false;
+  dlRunning = false;
 });
 
 // ===== PREVIEW TAB =====
@@ -1297,6 +1341,13 @@ async function showResults(container, results) {
       row.download = r.filename;
       row.textContent = `⬇ ${r.filename} (${r.device})`;
       row.style.cssText = 'display:block; padding:8px 12px; background:var(--accent); color:#fff; border-radius:6px; text-align:center; text-decoration:none; margin-bottom:4px; font-weight:500;';
+      if (CLOUD && r.folder === '_input') {
+        row.addEventListener('click', () => {
+          fetch('/mark-downloaded/' + encodeURIComponent(r.filename), { method: 'POST' });
+          row.style.background = 'var(--success-border)';
+          row.textContent = `✓ ${r.filename} — saved, auto-deletes in 5 min`;
+        });
+      }
     } else {
       row.href = '#';
       row.textContent = `${r.filename}`;
@@ -1309,7 +1360,7 @@ async function showResults(container, results) {
     const note = document.createElement('div');
     note.style.cssText = 'font-size:11px; color:var(--muted); margin-top:6px; text-align:center;';
     note.textContent = CLOUD
-      ? `Tap each file to save to your device`
+      ? `Tap to save. Files auto-delete from server 5 min after download.`
       : `${results.length} file${results.length > 1 ? 's' : ''} ready`;
     container.appendChild(note);
   }

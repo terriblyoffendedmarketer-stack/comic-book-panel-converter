@@ -20,6 +20,7 @@ import shutil
 import threading
 import subprocess
 import math
+import time
 from pathlib import Path
 
 from flask import Flask, render_template, request, jsonify, send_from_directory
@@ -58,6 +59,54 @@ INPUT_DIR.mkdir(parents=True, exist_ok=True)
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 jobs = {}
+
+# --- Storage cleanup (cloud mode) ---
+cleanup_timers = {}
+
+def get_free_mb():
+    return shutil.disk_usage(str(DATA_DIR)).free / (1024 * 1024)
+
+def get_input_files_by_age():
+    """Return input files sorted oldest-first."""
+    extensions = {'.cbz', '.cbr', '.cb7', '.xtc'}
+    files = []
+    if INPUT_DIR.exists():
+        for f in INPUT_DIR.iterdir():
+            if f.suffix.lower() in extensions and f.is_file():
+                files.append(f)
+    files.sort(key=lambda f: f.stat().st_mtime)
+    return files
+
+def cleanup_oldest_until_free(target_free_mb=150):
+    """Delete oldest downloaded files until we have enough free space."""
+    if not CLOUD:
+        return
+    downloaded = get_downloaded_files()
+    while get_free_mb() < target_free_mb:
+        files = get_input_files_by_age()
+        candidates = [f for f in files if f.name in downloaded]
+        if not candidates:
+            candidates = files
+        if not candidates:
+            break
+        victim = candidates[0]
+        victim.unlink(missing_ok=True)
+        victim.with_suffix('.manga').unlink(missing_ok=True)
+
+def cleanup_file_after_delay(filepath, delay_seconds=300):
+    """Schedule a file for deletion after delay_seconds (default 5 min)."""
+    path = Path(filepath)
+    def _delete():
+        time.sleep(delay_seconds)
+        if path.exists():
+            path.unlink(missing_ok=True)
+            path.with_suffix('.manga').unlink(missing_ok=True)
+        cleanup_timers.pop(str(path), None)
+    key = str(path)
+    if key not in cleanup_timers:
+        t = threading.Thread(target=_delete, daemon=True)
+        cleanup_timers[key] = t
+        t.start()
 
 DEVICE_PROFILES = {
     'xteink': {
@@ -329,6 +378,12 @@ def run_mangadex_download(job_id, manga_id, manga_title, volume_nums):
                 progress(f"Volume {vol_num} not found, skipping...")
                 continue
 
+            if CLOUD and get_free_mb() < 50:
+                cleanup_oldest_until_free(100)
+                if get_free_mb() < 50:
+                    progress(f"Disk full — stopping after {len(downloaded_files)} volumes. Download your files and delete to free space.")
+                    break
+
             vol_data = all_volumes[vol_num]
             cbz_path = download_volume_as_cbz(
                 manga_id, manga_title, vol_num,
@@ -389,6 +444,16 @@ def get_downloaded_files():
     if not DOWNLOADS_LOG.exists():
         return set()
     return set(DOWNLOADS_LOG.read_text().strip().splitlines())
+
+
+def startup_cleanup():
+    """Run on app start: remove old files if disk is tight."""
+    if not CLOUD:
+        return
+    if get_free_mb() < 150:
+        cleanup_oldest_until_free(150)
+
+startup_cleanup()
 
 
 @app.route('/files')
@@ -497,6 +562,8 @@ def download_file(filepath):
 @app.route('/input/<path:filepath>')
 def download_input_file(filepath):
     """Serve files from input/ (for downloading CBZs to local machine)."""
+    if CLOUD:
+        cleanup_file_after_delay(INPUT_DIR / filepath)
     return send_from_directory(str(INPUT_DIR), filepath, as_attachment=True)
 
 
@@ -541,6 +608,32 @@ def cleanup_input_file(filepath):
         elif d.is_file() and stem in d.name:
             d.unlink(missing_ok=True)
     return jsonify({'ok': True})
+
+
+@app.route('/mark-downloaded/<path:filepath>', methods=['POST'])
+def mark_downloaded(filepath):
+    """User saved a file to their device — schedule server cleanup in 5 min."""
+    target = INPUT_DIR / filepath
+    if CLOUD and target.exists():
+        cleanup_file_after_delay(target)
+        return jsonify({'ok': True, 'cleanup_in': 300})
+    return jsonify({'ok': True})
+
+
+@app.route('/flush-storage', methods=['POST'])
+def flush_storage():
+    """Delete all files from input/ and output/ to free server storage."""
+    count = 0
+    for d in (INPUT_DIR, OUTPUT_DIR):
+        if d.exists():
+            for f in d.rglob('*'):
+                if f.is_file():
+                    f.unlink(missing_ok=True)
+                    count += 1
+    if DOWNLOADS_LOG.exists():
+        DOWNLOADS_LOG.unlink(missing_ok=True)
+    free = shutil.disk_usage(str(DATA_DIR)).free / (1024 * 1024)
+    return jsonify({'ok': True, 'deleted': count, 'free_mb': round(free, 1)})
 
 
 @app.route('/disk-usage')
@@ -629,6 +722,11 @@ def mangadex_download():
 
     if not manga_id or not volume_nums:
         return jsonify({'error': 'Missing manga_id or volumes'}), 400
+
+    if CLOUD:
+        cleanup_oldest_until_free(100)
+        if get_free_mb() < 50:
+            return jsonify({'error': f'Not enough disk space ({get_free_mb():.0f} MB free). Download your files first, then delete them from input.'}), 400
 
     job_id = str(uuid.uuid4())[:8]
     jobs[job_id] = {
@@ -726,6 +824,11 @@ def source_download():
     if not volume_nums:
         return jsonify({'error': 'No volumes selected'}), 400
 
+    if CLOUD:
+        cleanup_oldest_until_free(100)
+        if get_free_mb() < 50:
+            return jsonify({'error': f'Not enough disk space ({get_free_mb():.0f} MB free). Download your files first, then delete them from input.'}), 400
+
     job_id = str(uuid.uuid4())[:8]
     jobs[job_id] = {
         'status': 'processing',
@@ -773,6 +876,12 @@ def run_source_download(job_id, source, manga_id, manga_slug, manga_title, volum
         for vol_num in volume_nums:
             if is_cancelled():
                 return
+
+            if CLOUD and get_free_mb() < 50:
+                cleanup_oldest_until_free(100)
+                if get_free_mb() < 50:
+                    progress(f"Disk full — stopping after {len(downloaded_files)} volumes. Download your files and delete to free space.")
+                    break
 
             if vol_num.startswith('range:'):
                 r = vol_num[6:].split('-')
