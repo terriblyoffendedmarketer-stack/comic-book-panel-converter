@@ -1,9 +1,10 @@
 # benchmark.py — Parameter sweep benchmark for comic converter pipeline
-# Profiles manga/comics across conversion settings using pure math metrics.
-# Pass 1: no AI models, computational metrics only.
+# Profiles manga/comics across conversion settings using math metrics
+# and optional AI vision scoring (CLIP via local vision-tool server).
 #
 # Usage:
 #   python scripts/benchmark.py                        # all titles, smart sweep
+#   python scripts/benchmark.py --vision               # add CLIP perceptual scoring
 #   python scripts/benchmark.py --mode quick           # one-at-a-time sweep
 #   python scripts/benchmark.py --mode full            # full grid (slow)
 #   python scripts/benchmark.py --titles "Berserk,Akira"  # specific titles
@@ -11,6 +12,7 @@
 #   python scripts/benchmark.py --report results.csv   # custom output path
 #
 # Requires: numpy, Pillow, scikit-image (for SSIM)
+# Optional: requests (for --vision), vision-tool server at localhost:9090
 #
 # Gotchas:
 # - Full grid is ~1920 combos per page. With 5 pages × 20 titles = 192k runs.
@@ -18,6 +20,8 @@
 # - Imports from src/ so run from project root or set PYTHONPATH.
 # - CBR files need unar installed (brew install unar on macOS).
 # - Native C dithering compiles on first use — first run may be slower.
+# - --vision adds ~500ms per combo (CLIP scoring). First call ~6s (model load).
+# - Vision server must be running: launchctl load ~/Library/LaunchAgents/com.local.vision-tool.plist
 
 import sys
 import os
@@ -180,6 +184,63 @@ def compute_contrast_ratio(img_array):
     if dark_avg < 1:
         dark_avg = 1
     return float(light_avg / dark_avg)
+
+
+VISION_URL = 'http://localhost:9090'
+
+CLIP_PROMPTS_POSITIVE = [
+    'clear readable manga page with sharp lines and good contrast',
+    'detailed black and white comic art with crisp linework',
+]
+CLIP_PROMPTS_NEGATIVE = [
+    'noisy grainy image with poor contrast and muddy details',
+    'washed out blurry image with lost detail',
+    'over-processed image with crushed blacks and harsh artifacts',
+]
+CLIP_PROMPTS = CLIP_PROMPTS_POSITIVE + CLIP_PROMPTS_NEGATIVE
+
+
+def vision_score(image_path):
+    """Score an image against quality prompts using CLIP via local vision server.
+    Returns dict with clip_quality (positive - negative avg), individual scores."""
+    import requests as req
+    try:
+        resp = req.post(f'{VISION_URL}/score', json={
+            'image': str(image_path),
+            'prompts': CLIP_PROMPTS,
+        }, timeout=30)
+        resp.raise_for_status()
+        data = resp.json()
+        scores = data['scores']
+
+        pos_avg = sum(scores[:len(CLIP_PROMPTS_POSITIVE)]) / len(CLIP_PROMPTS_POSITIVE)
+        neg_avg = sum(scores[len(CLIP_PROMPTS_POSITIVE):]) / len(CLIP_PROMPTS_NEGATIVE)
+
+        return {
+            'clip_quality': round(pos_avg - neg_avg, 6),
+            'clip_positive': round(pos_avg, 6),
+            'clip_negative': round(neg_avg, 6),
+            'clip_best_match': data['best_match'],
+            'clip_ms': round(data['elapsed_ms'], 1),
+        }
+    except Exception as e:
+        return {
+            'clip_quality': 0.0,
+            'clip_positive': 0.0,
+            'clip_negative': 0.0,
+            'clip_best_match': f'error: {e}',
+            'clip_ms': 0.0,
+        }
+
+
+def check_vision_server():
+    """Check if the vision-tool server is running."""
+    import requests as req
+    try:
+        resp = req.get(f'{VISION_URL}/health', timeout=5)
+        return resp.status_code == 200
+    except Exception:
+        return False
 
 
 def compute_all_metrics(original_gray, pre_dither_uint8, processed_uint8):
@@ -437,11 +498,19 @@ def sharpen_name(val):
 
 # --- Main benchmark ---
 
-def run_benchmark(input_dir, mode='smart', num_pages=5, titles_filter=None, report_path=None):
+def run_benchmark(input_dir, mode='smart', num_pages=5, titles_filter=None,
+                  report_path=None, use_vision=False):
     input_dir = Path(input_dir)
     if not input_dir.exists():
         print(f"Error: {input_dir} not found")
         sys.exit(1)
+
+    if use_vision:
+        if not check_vision_server():
+            print("Error: Vision server not running at localhost:9090")
+            print("Start it: launchctl load ~/Library/LaunchAgents/com.local.vision-tool.plist")
+            sys.exit(1)
+        print("Vision scoring: ON (CLIP via localhost:9090)")
 
     titles = discover_titles(input_dir)
     if titles_filter:
@@ -461,11 +530,20 @@ def run_benchmark(input_dir, mode='smart', num_pages=5, titles_filter=None, repo
         combos = generate_smart_sweep()
 
     print(f"Benchmark: {len(titles)} titles, {num_pages} pages each, {len(combos)} parameter combos")
-    print(f"Mode: {mode} | Total runs: ~{len(titles) * num_pages * len(combos):,}")
+    total_runs = len(titles) * num_pages * len(combos)
+    print(f"Mode: {mode} | Total runs: ~{total_runs:,}", end='')
+    if use_vision:
+        est_min = total_runs * 0.5 / 60
+        print(f" | Est. vision time: ~{est_min:.0f} min")
+    else:
+        print()
     print()
 
     if report_path is None:
-        report_path = Path('scripts') / f'benchmark_{mode}_{time.strftime("%Y%m%d_%H%M%S")}.csv'
+        tag = f'benchmark_{mode}'
+        if use_vision:
+            tag += '_vision'
+        report_path = Path('scripts') / f'{tag}_{time.strftime("%Y%m%d_%H%M%S")}.csv'
     else:
         report_path = Path(report_path)
 
@@ -480,76 +558,93 @@ def run_benchmark(input_dir, mode='smart', num_pages=5, titles_filter=None, repo
         'pre_dither_clip_black', 'pre_dither_clip_white', 'contrast_ratio',
         'file_size_bytes', 'processing_time_ms',
     ]
+    if use_vision:
+        fieldnames.extend(['clip_quality', 'clip_positive', 'clip_negative',
+                           'clip_best_match', 'clip_ms'])
 
     all_results = []
     title_summaries = {}
 
-    with open(report_path, 'w', newline='') as csvfile:
-        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-        writer.writeheader()
+    # Temp dir for vision scoring images
+    vision_tmp = Path(tempfile.mkdtemp(prefix='benchmark_vision_')) if use_vision else None
 
-        for ti, (title, archive_path) in enumerate(titles.items()):
-            print(f"[{ti + 1}/{len(titles)}] {title} ({archive_path.name})")
-            pages = sample_pages_from_archive(archive_path, num_pages)
-            if not pages:
-                print(f"  Skipped — no pages extracted")
-                continue
+    try:
+        with open(report_path, 'w', newline='') as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            writer.writeheader()
 
-            print(f"  Sampled {len(pages)} pages, running {len(combos)} combos each...")
-            title_results = []
+            for ti, (title, archive_path) in enumerate(titles.items()):
+                print(f"[{ti + 1}/{len(titles)}] {title} ({archive_path.name})")
+                pages = sample_pages_from_archive(archive_path, num_pages)
+                if not pages:
+                    print(f"  Skipped — no pages extracted")
+                    continue
 
-            for pi, page in enumerate(pages):
-                gray = page['gray']
+                label = "combos" if not use_vision else "combos+CLIP"
+                print(f"  Sampled {len(pages)} pages, running {len(combos)} {label} each...")
+                title_results = []
 
-                for ci, params in enumerate(combos):
-                    t0 = time.perf_counter()
-                    pre_dither, processed = run_pipeline(gray, params)
-                    elapsed_ms = (time.perf_counter() - t0) * 1000
+                for pi, page in enumerate(pages):
+                    gray = page['gray']
 
-                    metrics = compute_all_metrics(gray, pre_dither, processed)
-                    metrics['processing_time_ms'] = round(elapsed_ms, 1)
+                    for ci, params in enumerate(combos):
+                        t0 = time.perf_counter()
+                        pre_dither, processed = run_pipeline(gray, params)
+                        elapsed_ms = (time.perf_counter() - t0) * 1000
 
-                    row = {
-                        'title': title,
-                        'page': page['filename'],
-                        'page_w': page['width'],
-                        'page_h': page['height'],
-                        'dither': params['dither'],
-                        'gamma': params['gamma'],
-                        'contrast': params['contrast'],
-                        'contrast_name': contrast_name(params['contrast']),
-                        'sharpen': params['sharpen'],
-                        'sharpen_name': sharpen_name(params['sharpen']),
-                        'denoise': params['denoise'],
-                    }
-                    row.update(metrics)
-                    writer.writerow(row)
-                    all_results.append(row)
-                    title_results.append(row)
+                        metrics = compute_all_metrics(gray, pre_dither, processed)
+                        metrics['processing_time_ms'] = round(elapsed_ms, 1)
 
-                done = (pi + 1) * len(combos)
-                total = len(pages) * len(combos)
-                print(f"  Page {pi + 1}/{len(pages)}: {done}/{total} combos done", end='\r')
+                        if use_vision:
+                            tmp_path = vision_tmp / f't{ti}_p{pi}_c{ci}.png'
+                            Image.fromarray(processed, mode='L').save(tmp_path)
+                            clip = vision_score(tmp_path)
+                            metrics.update(clip)
+                            tmp_path.unlink(missing_ok=True)
 
-            print()
+                        row = {
+                            'title': title,
+                            'page': page['filename'],
+                            'page_w': page['width'],
+                            'page_h': page['height'],
+                            'dither': params['dither'],
+                            'gamma': params['gamma'],
+                            'contrast': params['contrast'],
+                            'contrast_name': contrast_name(params['contrast']),
+                            'sharpen': params['sharpen'],
+                            'sharpen_name': sharpen_name(params['sharpen']),
+                            'denoise': params['denoise'],
+                        }
+                        row.update(metrics)
+                        writer.writerow(row)
+                        all_results.append(row)
+                        title_results.append(row)
 
-            # Per-title summary
-            if title_results:
-                summary = _summarize_title(title, title_results)
-                title_summaries[title] = summary
+                    done = (pi + 1) * len(combos)
+                    total = len(pages) * len(combos)
+                    print(f"  Page {pi + 1}/{len(pages)}: {done}/{total} {label} done", end='\r')
+
+                print()
+
+                if title_results:
+                    summary = _summarize_title(title, title_results, use_vision)
+                    title_summaries[title] = summary
+    finally:
+        if vision_tmp:
+            shutil.rmtree(vision_tmp, ignore_errors=True)
 
     print()
     print(f"Results saved to {report_path}")
     print(f"Total rows: {len(all_results)}")
     print()
 
-    _print_report(title_summaries, all_results)
+    _print_report(title_summaries, all_results, use_vision)
 
-    # Save summary JSON alongside CSV
     summary_path = report_path.with_suffix('.json')
     with open(summary_path, 'w') as f:
         json.dump({
             'mode': mode,
+            'vision': use_vision,
             'num_titles': len(titles),
             'num_pages': num_pages,
             'num_combos': len(combos),
@@ -561,11 +656,11 @@ def run_benchmark(input_dir, mode='smart', num_pages=5, titles_filter=None, repo
     return all_results, title_summaries
 
 
-def _summarize_title(title, results):
+def _summarize_title(title, results, use_vision=False):
     """Find best parameters for a title based on composite score."""
     scored = []
     for r in results:
-        score = _composite_score(r)
+        score = _composite_score(r, use_vision)
         scored.append((score, r))
 
     scored.sort(key=lambda x: x[0], reverse=True)
@@ -611,35 +706,32 @@ def _summarize_title(title, results):
             'pre_dither_entropy': round(best.get('pre_dither_entropy', 0), 3),
             'pre_dither_edge_density': round(best.get('pre_dither_edge_density', 0), 2),
             'pre_dither_std': round(best.get('pre_dither_std', 0), 1),
+            'clip_quality': round(best.get('clip_quality', 0), 4) if use_vision else None,
         },
     }
 
 
-def _composite_score(r):
+def _composite_score(r, use_vision=False):
     """Weighted composite quality score. Higher is better.
 
     All detail/contrast/entropy metrics are from the PRE-DITHER image to avoid
     the dithering pattern itself inflating scores. SSIM is post-dither vs original
-    (the actual fidelity measure). Clipping penalties prevent degenerate extremes."""
-    # SSIM: structural preservation (0-1, higher = more faithful to original)
+    (the actual fidelity measure). Clipping penalties prevent degenerate extremes.
+
+    When vision scoring is active, CLIP quality gets 25% of the weight (the
+    perceptual "does this look like a good manga page" signal), and math metrics
+    are proportionally reduced."""
     ssim_score = r['ssim']
 
-    # Pre-dither entropy: tonal information before binarization (typical 5-7.5)
-    # Higher = more tonal gradations preserved through contrast/gamma
     pre_entropy = r.get('pre_dither_entropy', 5.0)
     entropy_score = min(pre_entropy / 7.0, 1.0)
 
-    # Pre-dither edge density: artwork detail preservation (typical 5-25%)
-    # Measures real line/texture detail, not dithering artifacts
     pre_edges = r.get('pre_dither_edge_density', 10.0)
     edge_score = min(pre_edges / 20.0, 1.0)
 
-    # Pre-dither std: tonal spread (typical 60-95)
-    # Higher = better use of the tonal range, more nuance for dithering
     pre_std = r.get('pre_dither_std', 70.0)
     std_score = min(pre_std / 85.0, 1.0)
 
-    # Clipping penalty: crushed blacks or blown whites destroy information
     clip_black = r.get('pre_dither_clip_black', 0)
     clip_white = r.get('pre_dither_clip_white', 0)
     clip_penalty = 0.0
@@ -649,10 +741,22 @@ def _composite_score(r):
         clip_penalty += (clip_white - 40) * 0.01
     clip_penalty = min(clip_penalty, 0.3)
 
-    # File size: proxy for detail preservation in dithered output
-    # More complex dithering patterns = more detail = larger PNG
     size = r['file_size_bytes']
     size_score = min(size / 20000, 1.0)
+
+    if use_vision and r.get('clip_quality', 0) != 0:
+        # clip_quality is typically 0.02-0.12 (positive - negative prompt scores)
+        # Normalize to 0-1 range: 0.02 → 0, 0.12 → 1
+        cq = r['clip_quality']
+        clip_score = max(0, min((cq - 0.02) / 0.10, 1.0))
+
+        return (0.25 * clip_score +
+                0.25 * ssim_score +
+                0.15 * entropy_score +
+                0.10 * edge_score +
+                0.10 * std_score +
+                0.15 * size_score
+                - clip_penalty)
 
     return (0.35 * ssim_score +
             0.20 * entropy_score +
@@ -662,13 +766,13 @@ def _composite_score(r):
             - clip_penalty)
 
 
-def _print_report(title_summaries, all_results):
+def _print_report(title_summaries, all_results, use_vision=False):
     """Print a readable summary to console."""
     print("=" * 80)
-    print("BENCHMARK RESULTS")
+    label = "BENCHMARK RESULTS (math + vision)" if use_vision else "BENCHMARK RESULTS"
+    print(label)
     print("=" * 80)
 
-    # Per-title results
     for title, summary in sorted(title_summaries.items()):
         bp = summary['best_params']
         print(f"\n{title}")
@@ -683,8 +787,11 @@ def _print_report(title_summaries, all_results):
             print(f"  Default rank: #{summary['default_rank']}/{summary['total_combos']} "
                   f"(top {pct:.0f}%)")
         m = summary['best_metrics']
-        print(f"  Metrics: SSIM={m['ssim']}, entropy={m['pre_dither_entropy']}, "
-              f"edges={m['pre_dither_edge_density']}%, std={m['pre_dither_std']}")
+        metrics_str = (f"  Metrics: SSIM={m['ssim']}, entropy={m['pre_dither_entropy']}, "
+                       f"edges={m['pre_dither_edge_density']}%, std={m['pre_dither_std']}")
+        if use_vision and m.get('clip_quality') is not None:
+            metrics_str += f", CLIP={m['clip_quality']}"
+        print(metrics_str)
 
     # Cross-title analysis
     print(f"\n{'=' * 80}")
@@ -741,6 +848,8 @@ def main():
                         help='Output CSV path (default: auto-named in scripts/)')
     parser.add_argument('--input-dir', type=str, default='input',
                         help='Input directory (default: input/)')
+    parser.add_argument('--vision', action='store_true',
+                        help='Add CLIP perceptual scoring via local vision server')
     args = parser.parse_args()
 
     run_benchmark(
@@ -749,6 +858,7 @@ def main():
         num_pages=args.pages,
         titles_filter=args.titles,
         report_path=args.report,
+        use_vision=args.vision,
     )
 
 

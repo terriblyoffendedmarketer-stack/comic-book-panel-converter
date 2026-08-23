@@ -1,0 +1,361 @@
+{
+  "mode": "smart",
+  "num_titles": 16,
+  "num_pages": 3,
+  "num_combos": 66,
+  "total_runs": 3036,
+  "titles": {
+    "Akira": {
+      "best_params": {
+        "dither": "atkinson",
+        "gamma": 1.0,
+        "contrast": 2,
+        "contrast_name": "normal",
+        "sharpen": 0.0,
+        "sharpen_name": "off",
+        "denoise": false
+      },
+      "best_score": 0.7729,
+      "worst_score": 0.4659,
+      "default_score": 0.7653,
+      "default_rank": 19,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.3926,
+        "pre_dither_entropy": 6.493,
+        "pre_dither_edge_density": 51.66,
+        "pre_dither_std": 86.0
+      }
+    },
+    "Berserk": {
+      "best_params": {
+        "dither": "atkinson",
+        "gamma": 1.0,
+        "contrast": 0,
+        "contrast_name": "off",
+        "sharpen": 0.7,
+        "sharpen_name": "normal",
+        "denoise": false
+      },
+      "best_score": 0.9256,
+      "worst_score": 0.6504,
+      "default_score": 0.9129,
+      "default_rank": 22,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.8097,
+        "pre_dither_entropy": 6.725,
+        "pre_dither_edge_density": 60.88,
+        "pre_dither_std": 92.6
+      }
+    },
+    "Blame": {
+      "best_params": {
+        "dither": "atkinson",
+        "gamma": 1.0,
+        "contrast": 2,
+        "contrast_name": "normal",
+        "sharpen": 0.0,
+        "sharpen_name": "off",
+        "denoise": false
+      },
+      "best_score": 0.7747,
+      "worst_score": 0.6784,
+      "default_score": 0.7651,
+      "default_rank": 24,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.3877,
+        "pre_dither_entropy": 6.615,
+        "pre_dither_edge_density": 59.31,
+        "pre_dither_std": 93.5
+      }
+    },
+    "Chainsaw Man": {
+      "best_params": {
+        "dither": "floyd",
+        "gamma": 2.0,
+        "contrast": 2,
+        "contrast_name": "normal",
+        "sharpen": 0.7,
+        "sharpen_name": "normal",
+        "denoise": false
+      },
+      "best_score": 0.7832,
+      "worst_score": 0.7087,
+      "default_score": 0.7731,
+      "default_rank": 42,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.9239,
+        "pre_dither_entropy": 4.18,
+        "pre_dither_edge_density": 38.09,
+        "pre_dither_std": 107.4
+      }
+    },
+    "Dragon Ball": {
+      "best_params": {
+        "dither": "floyd",
+        "gamma": 0.5,
+        "contrast": 2,
+        "contrast_name": "normal",
+        "sharpen": 0.7,
+        "sharpen_name": "normal",
+        "denoise": false
+      },
+      "best_score": 0.784,
+      "worst_score": 0.5889,
+      "default_score": 0.7686,
+      "default_rank": 30,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.5214,
+        "pre_dither_entropy": 5.303,
+        "pre_dither_edge_density": 46.45,
+        "pre_dither_std": 102.5
+      }
+    },
+    "JoJo no Kimyou na Bouken Part 6 - Stone Ocean": {
+      "best_params": {
+        "dither": "atkinson",
+        "gamma": 1.0,
+        "contrast": 2,
+        "contrast_name": "normal",
+        "sharpen": 0.0,
+        "sharpen_name": "off",
+        "denoise": false
+      },
+      "best_score": 0.9165,
+      "worst_score": 0.7304,
+      "default_score": 0.9068,
+      "default_rank": 23,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.886,
+        "pre_dither_entropy": 5.474,
+        "pre_dither_edge_density": 58.11,
+        "pre_dither_std": 109.0
+      }
+    },
+    "JoJo no Kimyou na Bouken Part 7 - Steel Ball Run": {
+      "best_params": {
+        "dither": "floyd",
+        "gamma": 0.5,
+        "contrast": 2,
+        "contrast_name": "normal",
+        "sharpen": 0.7,
+        "sharpen_name": "normal",
+        "denoise": false
+      },
+      "best_score": 0.6747,
+      "worst_score": 0.4968,
+      "default_score": 0.6536,
+      "default_rank": 30,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.3325,
+        "pre_dither_entropy": 5.16,
+        "pre_dither_edge_density": 59.85,
+        "pre_dither_std": 83.6
+      }
+    },
+    "Koe no Katachi": {
+      "best_params": {
+        "dither": "atkinson",
+        "gamma": 1.0,
+        "contrast": 2,
+        "contrast_name": "normal",
+        "sharpen": 0.0,
+        "sharpen_name": "off",
+        "denoise": false
+      },
+      "best_score": 0.8181,
+      "worst_score": 0.4909,
+      "default_score": 0.8038,
+      "default_rank": 21,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.5751,
+        "pre_dither_entropy": 5.84,
+        "pre_dither_edge_density": 53.88,
+        "pre_dither_std": 97.8
+      }
+    },
+    "One Piece": {
+      "best_params": {
+        "dither": "atkinson",
+        "gamma": 1.0,
+        "contrast": 2,
+        "contrast_name": "normal",
+        "sharpen": 0.0,
+        "sharpen_name": "off",
+        "denoise": false
+      },
+      "best_score": 0.7417,
+      "worst_score": 0.6075,
+      "default_score": 0.7338,
+      "default_rank": 24,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.3674,
+        "pre_dither_entropy": 5.707,
+        "pre_dither_edge_density": 52.27,
+        "pre_dither_std": 86.2
+      }
+    },
+    "One-Punch Man": {
+      "best_params": {
+        "dither": "atkinson",
+        "gamma": 1.0,
+        "contrast": 1,
+        "contrast_name": "light",
+        "sharpen": 0.7,
+        "sharpen_name": "normal",
+        "denoise": false
+      },
+      "best_score": 0.9105,
+      "worst_score": 0.6034,
+      "default_score": 0.8902,
+      "default_rank": 26,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.7964,
+        "pre_dither_entropy": 6.412,
+        "pre_dither_edge_density": 47.52,
+        "pre_dither_std": 84.2
+      }
+    },
+    "Oyasumi Punpun": {
+      "best_params": {
+        "dither": "atkinson",
+        "gamma": 1.0,
+        "contrast": 2,
+        "contrast_name": "normal",
+        "sharpen": 0.0,
+        "sharpen_name": "off",
+        "denoise": false
+      },
+      "best_score": 0.7602,
+      "worst_score": 0.5694,
+      "default_score": 0.7564,
+      "default_rank": 15,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.5035,
+        "pre_dither_entropy": 4.815,
+        "pre_dither_edge_density": 34.36,
+        "pre_dither_std": 99.0
+      }
+    },
+    "SPYFAMILY Extras": {
+      "best_params": {
+        "dither": "floyd",
+        "gamma": 1.6,
+        "contrast": 2,
+        "contrast_name": "normal",
+        "sharpen": 0.7,
+        "sharpen_name": "normal",
+        "denoise": false
+      },
+      "best_score": -0.1496,
+      "worst_score": -0.1929,
+      "default_score": -0.1518,
+      "default_rank": 16,
+      "total_combos": 66,
+      "best_metrics": {
+        "ssim": 0.0192,
+        "pre_dither_entropy": 0.653,
+        "pre_dither_edge_density": 4.67,
+        "pre_dither_std": 38.4
+      }
+    },
+    "The Riddler - Year One (2023) (digital) (Son of Ultron-Empire)": {
+      "best_params": {
+        "dither": "atkinson",
+        "gamma": 1.0,
+        "contrast": 0,
+        "contrast_name": "off",
+        "sharpen": 0.7,
+        "sharpen_name": "normal",
+        "denoise": false
+      },
+      "best_score": 0.8682,
+      "worst_score": 0.5805,
+      "default_score": 0.8321,
+      "default_rank": 22,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.767,
+        "pre_dither_entropy": 6.073,
+        "pre_dither_edge_density": 30.23,
+        "pre_dither_std": 71.5
+      }
+    },
+    "The Sandman v01 - Preludes and Nocturnes (2010) (digital-Empire)": {
+      "best_params": {
+        "dither": "floyd",
+        "gamma": 1.5,
+        "contrast": 0,
+        "contrast_name": "off",
+        "sharpen": 0.7,
+        "sharpen_name": "normal",
+        "denoise": false
+      },
+      "best_score": 0.9044,
+      "worst_score": 0.1719,
+      "default_score": 0.8454,
+      "default_rank": 33,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.7671,
+        "pre_dither_entropy": 6.75,
+        "pre_dither_edge_density": 58.12,
+        "pre_dither_std": 95.4
+      }
+    },
+    "Vagabond": {
+      "best_params": {
+        "dither": "atkinson",
+        "gamma": 1.0,
+        "contrast": 2,
+        "contrast_name": "normal",
+        "sharpen": 0.7,
+        "sharpen_name": "normal",
+        "denoise": false
+      },
+      "best_score": 0.9035,
+      "worst_score": 0.479,
+      "default_score": 0.8961,
+      "default_rank": 33,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.8075,
+        "pre_dither_entropy": 5.979,
+        "pre_dither_edge_density": 59.19,
+        "pre_dither_std": 94.1
+      }
+    },
+    "Vinland Saga": {
+      "best_params": {
+        "dither": "floyd",
+        "gamma": 0.5,
+        "contrast": 2,
+        "contrast_name": "normal",
+        "sharpen": 0.7,
+        "sharpen_name": "normal",
+        "denoise": false
+      },
+      "best_score": 0.7574,
+      "worst_score": 0.6291,
+      "default_score": 0.7306,
+      "default_rank": 41,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.4047,
+        "pre_dither_entropy": 5.802,
+        "pre_dither_edge_density": 42.73,
+        "pre_dither_std": 85.5
+      }
+    }
+  }
+}

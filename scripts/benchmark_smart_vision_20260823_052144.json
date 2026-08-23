@@ -1,0 +1,1183 @@
+{
+  "mode": "smart",
+  "vision": true,
+  "num_titles": 51,
+  "num_pages": 3,
+  "num_combos": 66,
+  "total_runs": 9966,
+  "titles": {
+    "Amazing SpiderMan": {
+      "best_params": {
+        "dither": "atkinson",
+        "gamma": 0.9,
+        "contrast": 1,
+        "contrast_name": "light",
+        "sharpen": 0.7,
+        "sharpen_name": "normal",
+        "denoise": false
+      },
+      "best_score": 0.9416,
+      "worst_score": 0.7944,
+      "default_score": 0.9348,
+      "default_rank": 17,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.7682,
+        "pre_dither_entropy": 6.978,
+        "pre_dither_edge_density": 58.98,
+        "pre_dither_std": 91.4,
+        "clip_quality": 0.1266
+      }
+    },
+    "Fantastic Four": {
+      "best_params": {
+        "dither": "atkinson",
+        "gamma": 1.3,
+        "contrast": 2,
+        "contrast_name": "normal",
+        "sharpen": 0.7,
+        "sharpen_name": "normal",
+        "denoise": false
+      },
+      "best_score": 0.8966,
+      "worst_score": 0.5152,
+      "default_score": 0.8917,
+      "default_rank": 8,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.6595,
+        "pre_dither_entropy": 6.149,
+        "pre_dither_edge_density": 39.09,
+        "pre_dither_std": 99.9,
+        "clip_quality": 0.12
+      }
+    },
+    "New Avengers Illuminati 1 (Road to Civil War)": {
+      "best_params": {
+        "dither": "atkinson",
+        "gamma": 1.2,
+        "contrast": 0,
+        "contrast_name": "off",
+        "sharpen": 0.7,
+        "sharpen_name": "normal",
+        "denoise": false
+      },
+      "best_score": 0.9513,
+      "worst_score": 0.7508,
+      "default_score": 0.9383,
+      "default_rank": 27,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.8206,
+        "pre_dither_entropy": 6.951,
+        "pre_dither_edge_density": 49.29,
+        "pre_dither_std": 98.3,
+        "clip_quality": 0.1189
+      }
+    },
+    "Civil War": {
+      "best_params": {
+        "dither": "sierra-lite",
+        "gamma": 1.0,
+        "contrast": 1,
+        "contrast_name": "light",
+        "sharpen": 0.7,
+        "sharpen_name": "normal",
+        "denoise": false
+      },
+      "best_score": 0.9324,
+      "worst_score": 0.6583,
+      "default_score": 0.8814,
+      "default_rank": 32,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.7529,
+        "pre_dither_entropy": 6.965,
+        "pre_dither_edge_density": 55.29,
+        "pre_dither_std": 100.3,
+        "clip_quality": 0.1179
+      }
+    },
+    "Marvel Spotlight": {
+      "best_params": {
+        "dither": "atkinson",
+        "gamma": 0.5,
+        "contrast": 2,
+        "contrast_name": "normal",
+        "sharpen": 0.7,
+        "sharpen_name": "normal",
+        "denoise": false
+      },
+      "best_score": 0.8947,
+      "worst_score": 0.3489,
+      "default_score": 0.8822,
+      "default_rank": 8,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.6804,
+        "pre_dither_entropy": 5.815,
+        "pre_dither_edge_density": 47.43,
+        "pre_dither_std": 100.8,
+        "clip_quality": 0.1502
+      }
+    },
+    "she hulk": {
+      "best_params": {
+        "dither": "atkinson",
+        "gamma": 1.5,
+        "contrast": 0,
+        "contrast_name": "off",
+        "sharpen": 0.7,
+        "sharpen_name": "normal",
+        "denoise": false
+      },
+      "best_score": 0.9323,
+      "worst_score": 0.7116,
+      "default_score": 0.899,
+      "default_rank": 31,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.7566,
+        "pre_dither_entropy": 6.68,
+        "pre_dither_edge_density": 40.88,
+        "pre_dither_std": 93.5,
+        "clip_quality": 0.1455
+      }
+    },
+    "Wolverine": {
+      "best_params": {
+        "dither": "atkinson",
+        "gamma": 1.1,
+        "contrast": 1,
+        "contrast_name": "light",
+        "sharpen": 0.7,
+        "sharpen_name": "normal",
+        "denoise": false
+      },
+      "best_score": 0.9437,
+      "worst_score": 0.487,
+      "default_score": 0.9419,
+      "default_rank": 4,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.8067,
+        "pre_dither_entropy": 6.995,
+        "pre_dither_edge_density": 48.89,
+        "pre_dither_std": 94.5,
+        "clip_quality": 0.1168
+      }
+    },
+    "Civil War Frontline": {
+      "best_params": {
+        "dither": "atkinson",
+        "gamma": 0.8,
+        "contrast": 1,
+        "contrast_name": "light",
+        "sharpen": 0.7,
+        "sharpen_name": "normal",
+        "denoise": false
+      },
+      "best_score": 0.9427,
+      "worst_score": 0.7264,
+      "default_score": 0.9391,
+      "default_rank": 8,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.771,
+        "pre_dither_entropy": 7.045,
+        "pre_dither_edge_density": 54.38,
+        "pre_dither_std": 95.1,
+        "clip_quality": 0.125
+      }
+    },
+    "New Avengers": {
+      "best_params": {
+        "dither": "atkinson",
+        "gamma": 1.2,
+        "contrast": 1,
+        "contrast_name": "light",
+        "sharpen": 0.7,
+        "sharpen_name": "normal",
+        "denoise": false
+      },
+      "best_score": 0.9318,
+      "worst_score": 0.458,
+      "default_score": 0.8941,
+      "default_rank": 20,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.7564,
+        "pre_dither_entropy": 6.682,
+        "pre_dither_edge_density": 50.64,
+        "pre_dither_std": 96.5,
+        "clip_quality": 0.1198
+      }
+    },
+    "Thunderbolts 103 Civil War": {
+      "best_params": {
+        "dither": "atkinson",
+        "gamma": 1.0,
+        "contrast": 1,
+        "contrast_name": "light",
+        "sharpen": 0.7,
+        "sharpen_name": "normal",
+        "denoise": false
+      },
+      "best_score": 0.9321,
+      "worst_score": 0.8429,
+      "default_score": 0.922,
+      "default_rank": 12,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.8277,
+        "pre_dither_entropy": 6.931,
+        "pre_dither_edge_density": 55.51,
+        "pre_dither_std": 93.1,
+        "clip_quality": 0.1106
+      }
+    },
+    "X Factor": {
+      "best_params": {
+        "dither": "atkinson",
+        "gamma": 1.5,
+        "contrast": 0,
+        "contrast_name": "off",
+        "sharpen": 0.7,
+        "sharpen_name": "normal",
+        "denoise": false
+      },
+      "best_score": 0.9583,
+      "worst_score": 0.6661,
+      "default_score": 0.9487,
+      "default_rank": 21,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.8921,
+        "pre_dither_entropy": 6.315,
+        "pre_dither_edge_density": 50.53,
+        "pre_dither_std": 104.7,
+        "clip_quality": 0.1411
+      }
+    },
+    "Civil War X men": {
+      "best_params": {
+        "dither": "atkinson",
+        "gamma": 1.1,
+        "contrast": 1,
+        "contrast_name": "light",
+        "sharpen": 0.7,
+        "sharpen_name": "normal",
+        "denoise": false
+      },
+      "best_score": 0.9365,
+      "worst_score": 0.5915,
+      "default_score": 0.9254,
+      "default_rank": 15,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.746,
+        "pre_dither_entropy": 6.998,
+        "pre_dither_edge_density": 61.63,
+        "pre_dither_std": 93.2,
+        "clip_quality": 0.1635
+      }
+    },
+    "Young Avengers Runaways": {
+      "best_params": {
+        "dither": "atkinson",
+        "gamma": 0.5,
+        "contrast": 2,
+        "contrast_name": "normal",
+        "sharpen": 0.7,
+        "sharpen_name": "normal",
+        "denoise": false
+      },
+      "best_score": 0.935,
+      "worst_score": 0.7475,
+      "default_score": 0.9213,
+      "default_rank": 20,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.7643,
+        "pre_dither_entropy": 6.717,
+        "pre_dither_edge_density": 53.88,
+        "pre_dither_std": 98.9,
+        "clip_quality": 0.1308
+      }
+    },
+    "Black Panther": {
+      "best_params": {
+        "dither": "atkinson",
+        "gamma": 1.0,
+        "contrast": 0,
+        "contrast_name": "off",
+        "sharpen": 0.7,
+        "sharpen_name": "normal",
+        "denoise": false
+      },
+      "best_score": 0.9495,
+      "worst_score": 0.7619,
+      "default_score": 0.9443,
+      "default_rank": 18,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.7981,
+        "pre_dither_entropy": 7.016,
+        "pre_dither_edge_density": 56.29,
+        "pre_dither_std": 93.7,
+        "clip_quality": 0.1212
+      }
+    },
+    "Cable Deadpoll": {
+      "best_params": {
+        "dither": "atkinson",
+        "gamma": 0.8,
+        "contrast": 1,
+        "contrast_name": "light",
+        "sharpen": 0.7,
+        "sharpen_name": "normal",
+        "denoise": false
+      },
+      "best_score": 0.9407,
+      "worst_score": 0.8859,
+      "default_score": 0.937,
+      "default_rank": 10,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.7806,
+        "pre_dither_entropy": 6.792,
+        "pre_dither_edge_density": 54.2,
+        "pre_dither_std": 96.6,
+        "clip_quality": 0.121
+      }
+    },
+    "Thunderbolts": {
+      "best_params": {
+        "dither": "atkinson",
+        "gamma": 1.0,
+        "contrast": 0,
+        "contrast_name": "off",
+        "sharpen": 0.7,
+        "sharpen_name": "normal",
+        "denoise": false
+      },
+      "best_score": 0.9389,
+      "worst_score": 0.5339,
+      "default_score": 0.9291,
+      "default_rank": 12,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.7555,
+        "pre_dither_entropy": 7.005,
+        "pre_dither_edge_density": 58.23,
+        "pre_dither_std": 90.2,
+        "clip_quality": 0.1311
+      }
+    },
+    "Civil War X Men": {
+      "best_params": {
+        "dither": "atkinson",
+        "gamma": 0.9,
+        "contrast": 1,
+        "contrast_name": "light",
+        "sharpen": 0.7,
+        "sharpen_name": "normal",
+        "denoise": false
+      },
+      "best_score": 0.9288,
+      "worst_score": 0.7568,
+      "default_score": 0.9146,
+      "default_rank": 25,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.7243,
+        "pre_dither_entropy": 6.892,
+        "pre_dither_edge_density": 45.45,
+        "pre_dither_std": 97.9,
+        "clip_quality": 0.128
+      }
+    },
+    "BlackPanther": {
+      "best_params": {
+        "dither": "atkinson",
+        "gamma": 0.8,
+        "contrast": 1,
+        "contrast_name": "light",
+        "sharpen": 0.7,
+        "sharpen_name": "normal",
+        "denoise": false
+      },
+      "best_score": 0.9279,
+      "worst_score": 0.7608,
+      "default_score": 0.9023,
+      "default_rank": 17,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.7233,
+        "pre_dither_entropy": 6.861,
+        "pre_dither_edge_density": 56.69,
+        "pre_dither_std": 92.9,
+        "clip_quality": 0.1237
+      }
+    },
+    "Cable Deadpool": {
+      "best_params": {
+        "dither": "atkinson",
+        "gamma": 1.5,
+        "contrast": 0,
+        "contrast_name": "off",
+        "sharpen": 0.7,
+        "sharpen_name": "normal",
+        "denoise": false
+      },
+      "best_score": 0.9324,
+      "worst_score": 0.8061,
+      "default_score": 0.9304,
+      "default_rank": 5,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.7607,
+        "pre_dither_entropy": 6.796,
+        "pre_dither_edge_density": 49.11,
+        "pre_dither_std": 92.7,
+        "clip_quality": 0.1186
+      }
+    },
+    "Heroes for Hire": {
+      "best_params": {
+        "dither": "atkinson",
+        "gamma": 1.1,
+        "contrast": 0,
+        "contrast_name": "off",
+        "sharpen": 0.7,
+        "sharpen_name": "normal",
+        "denoise": false
+      },
+      "best_score": 0.9285,
+      "worst_score": 0.8323,
+      "default_score": 0.9153,
+      "default_rank": 20,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.7167,
+        "pre_dither_entropy": 7.388,
+        "pre_dither_edge_density": 59.65,
+        "pre_dither_std": 84.4,
+        "clip_quality": 0.1247
+      }
+    },
+    "Ms Marvel": {
+      "best_params": {
+        "dither": "atkinson",
+        "gamma": 0.7,
+        "contrast": 0,
+        "contrast_name": "off",
+        "sharpen": 0.7,
+        "sharpen_name": "normal",
+        "denoise": false
+      },
+      "best_score": 0.9581,
+      "worst_score": 0.6317,
+      "default_score": 0.9432,
+      "default_rank": 23,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.8372,
+        "pre_dither_entropy": 6.945,
+        "pre_dither_edge_density": 41.67,
+        "pre_dither_std": 98.7,
+        "clip_quality": 0.1538
+      }
+    },
+    "Capitan America Vol": {
+      "best_params": {
+        "dither": "atkinson",
+        "gamma": 1.0,
+        "contrast": 0,
+        "contrast_name": "off",
+        "sharpen": 0.7,
+        "sharpen_name": "normal",
+        "denoise": false
+      },
+      "best_score": 0.9405,
+      "worst_score": 0.5879,
+      "default_score": 0.9229,
+      "default_rank": 29,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.8363,
+        "pre_dither_entropy": 6.134,
+        "pre_dither_edge_density": 45.1,
+        "pre_dither_std": 85.7,
+        "clip_quality": 0.127
+      }
+    },
+    "Civil War Chosing Sides": {
+      "best_params": {
+        "dither": "atkinson",
+        "gamma": 1.5,
+        "contrast": 1,
+        "contrast_name": "light",
+        "sharpen": 0.7,
+        "sharpen_name": "normal",
+        "denoise": false
+      },
+      "best_score": 0.9404,
+      "worst_score": 0.7865,
+      "default_score": 0.928,
+      "default_rank": 16,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.7642,
+        "pre_dither_entropy": 6.969,
+        "pre_dither_edge_density": 43.11,
+        "pre_dither_std": 85.8,
+        "clip_quality": 0.1505
+      }
+    },
+    "Capitan America": {
+      "best_params": {
+        "dither": "atkinson",
+        "gamma": 1.5,
+        "contrast": 0,
+        "contrast_name": "off",
+        "sharpen": 0.7,
+        "sharpen_name": "normal",
+        "denoise": false
+      },
+      "best_score": 0.9399,
+      "worst_score": 0.7296,
+      "default_score": 0.8999,
+      "default_rank": 38,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.7765,
+        "pre_dither_entropy": 6.802,
+        "pre_dither_edge_density": 49.71,
+        "pre_dither_std": 94.5,
+        "clip_quality": 0.1356
+      }
+    },
+    "Invincible Iron Man": {
+      "best_params": {
+        "dither": "atkinson",
+        "gamma": 1.1,
+        "contrast": 1,
+        "contrast_name": "light",
+        "sharpen": 0.7,
+        "sharpen_name": "normal",
+        "denoise": false
+      },
+      "best_score": 0.9299,
+      "worst_score": 0.723,
+      "default_score": 0.912,
+      "default_rank": 10,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.7446,
+        "pre_dither_entropy": 6.79,
+        "pre_dither_edge_density": 61.42,
+        "pre_dither_std": 93.4,
+        "clip_quality": 0.1193
+      }
+    },
+    "Amazing Spiderman": {
+      "best_params": {
+        "dither": "atkinson",
+        "gamma": 0.9,
+        "contrast": 1,
+        "contrast_name": "light",
+        "sharpen": 0.7,
+        "sharpen_name": "normal",
+        "denoise": false
+      },
+      "best_score": 0.9405,
+      "worst_score": 0.7984,
+      "default_score": 0.9339,
+      "default_rank": 16,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.7622,
+        "pre_dither_entropy": 7.008,
+        "pre_dither_edge_density": 44.66,
+        "pre_dither_std": 94.1,
+        "clip_quality": 0.1311
+      }
+    },
+    "Iron Man": {
+      "best_params": {
+        "dither": "atkinson",
+        "gamma": 0.8,
+        "contrast": 2,
+        "contrast_name": "normal",
+        "sharpen": 0.7,
+        "sharpen_name": "normal",
+        "denoise": false
+      },
+      "best_score": 0.9208,
+      "worst_score": 0.5364,
+      "default_score": 0.9195,
+      "default_rank": 6,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.6843,
+        "pre_dither_entropy": 6.989,
+        "pre_dither_edge_density": 61.85,
+        "pre_dither_std": 94.0,
+        "clip_quality": 0.1351
+      }
+    },
+    "Moon Knight": {
+      "best_params": {
+        "dither": "atkinson",
+        "gamma": 1.1,
+        "contrast": 1,
+        "contrast_name": "light",
+        "sharpen": 0.7,
+        "sharpen_name": "normal",
+        "denoise": false
+      },
+      "best_score": 0.9464,
+      "worst_score": 0.6034,
+      "default_score": 0.9409,
+      "default_rank": 16,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.7857,
+        "pre_dither_entropy": 7.068,
+        "pre_dither_edge_density": 64.0,
+        "pre_dither_std": 92.2,
+        "clip_quality": 0.125
+      }
+    },
+    "Punisher Civil War Journal": {
+      "best_params": {
+        "dither": "atkinson",
+        "gamma": 1.2,
+        "contrast": 1,
+        "contrast_name": "light",
+        "sharpen": 0.7,
+        "sharpen_name": "normal",
+        "denoise": false
+      },
+      "best_score": 0.93,
+      "worst_score": 0.7123,
+      "default_score": 0.9206,
+      "default_rank": 8,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.7243,
+        "pre_dither_entropy": 7.084,
+        "pre_dither_edge_density": 52.85,
+        "pre_dither_std": 85.1,
+        "clip_quality": 0.1196
+      }
+    },
+    "Civil War Crimes": {
+      "best_params": {
+        "dither": "atkinson",
+        "gamma": 0.9,
+        "contrast": 2,
+        "contrast_name": "normal",
+        "sharpen": 0.7,
+        "sharpen_name": "normal",
+        "denoise": false
+      },
+      "best_score": 0.9249,
+      "worst_score": 0.7465,
+      "default_score": 0.9225,
+      "default_rank": 3,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.723,
+        "pre_dither_entropy": 6.727,
+        "pre_dither_edge_density": 60.05,
+        "pre_dither_std": 92.2,
+        "clip_quality": 0.1239
+      }
+    },
+    "Iron Man Capitan America": {
+      "best_params": {
+        "dither": "atkinson",
+        "gamma": 1.2,
+        "contrast": 2,
+        "contrast_name": "normal",
+        "sharpen": 0.7,
+        "sharpen_name": "normal",
+        "denoise": false
+      },
+      "best_score": 0.921,
+      "worst_score": 0.6768,
+      "default_score": 0.8988,
+      "default_rank": 60,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.7138,
+        "pre_dither_entropy": 6.654,
+        "pre_dither_edge_density": 42.21,
+        "pre_dither_std": 90.1,
+        "clip_quality": 0.1221
+      }
+    },
+    "Winter Soldier Winter Kills": {
+      "best_params": {
+        "dither": "atkinson",
+        "gamma": 1.1,
+        "contrast": 0,
+        "contrast_name": "off",
+        "sharpen": 0.7,
+        "sharpen_name": "normal",
+        "denoise": false
+      },
+      "best_score": 0.9474,
+      "worst_score": 0.601,
+      "default_score": 0.9413,
+      "default_rank": 6,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.8035,
+        "pre_dither_entropy": 6.836,
+        "pre_dither_edge_density": 53.28,
+        "pre_dither_std": 94.9,
+        "clip_quality": 0.1225
+      }
+    },
+    "Civil War The Return": {
+      "best_params": {
+        "dither": "atkinson",
+        "gamma": 1.2,
+        "contrast": 3,
+        "contrast_name": "strong",
+        "sharpen": 0.7,
+        "sharpen_name": "normal",
+        "denoise": false
+      },
+      "best_score": 0.9112,
+      "worst_score": 0.6844,
+      "default_score": 0.8867,
+      "default_rank": 25,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.7258,
+        "pre_dither_entropy": 6.101,
+        "pre_dither_edge_density": 39.34,
+        "pre_dither_std": 84.2,
+        "clip_quality": 0.122
+      }
+    },
+    "Blade": {
+      "best_params": {
+        "dither": "atkinson",
+        "gamma": 1.1,
+        "contrast": 1,
+        "contrast_name": "light",
+        "sharpen": 0.7,
+        "sharpen_name": "normal",
+        "denoise": false
+      },
+      "best_score": 0.938,
+      "worst_score": 0.6012,
+      "default_score": 0.9243,
+      "default_rank": 15,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.7577,
+        "pre_dither_entropy": 7.017,
+        "pre_dither_edge_density": 52.82,
+        "pre_dither_std": 90.0,
+        "clip_quality": 0.1195
+      }
+    },
+    "Civil War Battle Damage Report": {
+      "best_params": {
+        "dither": "atkinson",
+        "gamma": 1.2,
+        "contrast": 2,
+        "contrast_name": "normal",
+        "sharpen": 0.7,
+        "sharpen_name": "normal",
+        "denoise": false
+      },
+      "best_score": 0.9124,
+      "worst_score": 0.4342,
+      "default_score": 0.9087,
+      "default_rank": 4,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.7318,
+        "pre_dither_entropy": 6.507,
+        "pre_dither_edge_density": 74.23,
+        "pre_dither_std": 97.3,
+        "clip_quality": 0.116
+      }
+    },
+    "Akira": {
+      "best_params": {
+        "dither": "atkinson",
+        "gamma": 0.9,
+        "contrast": 2,
+        "contrast_name": "normal",
+        "sharpen": 0.7,
+        "sharpen_name": "normal",
+        "denoise": false
+      },
+      "best_score": 0.8384,
+      "worst_score": 0.4701,
+      "default_score": 0.8363,
+      "default_rank": 6,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.3994,
+        "pre_dither_entropy": 6.466,
+        "pre_dither_edge_density": 51.37,
+        "pre_dither_std": 88.4,
+        "clip_quality": 0.1213
+      }
+    },
+    "Berserk": {
+      "best_params": {
+        "dither": "atkinson",
+        "gamma": 0.9,
+        "contrast": 2,
+        "contrast_name": "normal",
+        "sharpen": 0.7,
+        "sharpen_name": "normal",
+        "denoise": false
+      },
+      "best_score": 0.9067,
+      "worst_score": 0.7546,
+      "default_score": 0.8963,
+      "default_rank": 14,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.8129,
+        "pre_dither_entropy": 6.531,
+        "pre_dither_edge_density": 61.09,
+        "pre_dither_std": 94.2,
+        "clip_quality": 0.1054
+      }
+    },
+    "Blame": {
+      "best_params": {
+        "dither": "atkinson",
+        "gamma": 0.7,
+        "contrast": 0,
+        "contrast_name": "off",
+        "sharpen": 0.7,
+        "sharpen_name": "normal",
+        "denoise": false
+      },
+      "best_score": 0.8092,
+      "worst_score": 0.6677,
+      "default_score": 0.8071,
+      "default_rank": 11,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.3509,
+        "pre_dither_entropy": 5.67,
+        "pre_dither_edge_density": 48.39,
+        "pre_dither_std": 87.4,
+        "clip_quality": 0.1221
+      }
+    },
+    "Chainsaw Man": {
+      "best_params": {
+        "dither": "atkinson",
+        "gamma": 2.0,
+        "contrast": 2,
+        "contrast_name": "normal",
+        "sharpen": 0.7,
+        "sharpen_name": "normal",
+        "denoise": false
+      },
+      "best_score": 0.8138,
+      "worst_score": 0.6711,
+      "default_score": 0.8033,
+      "default_rank": 25,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.9356,
+        "pre_dither_entropy": 4.18,
+        "pre_dither_edge_density": 38.09,
+        "pre_dither_std": 107.4,
+        "clip_quality": 0.1301
+      }
+    },
+    "Dragon Ball": {
+      "best_params": {
+        "dither": "atkinson",
+        "gamma": 1.0,
+        "contrast": 2,
+        "contrast_name": "normal",
+        "sharpen": 0.3,
+        "sharpen_name": "light",
+        "denoise": false
+      },
+      "best_score": 0.8053,
+      "worst_score": 0.6651,
+      "default_score": 0.8002,
+      "default_rank": 6,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.515,
+        "pre_dither_entropy": 5.369,
+        "pre_dither_edge_density": 44.6,
+        "pre_dither_std": 92.1,
+        "clip_quality": 0.1077
+      }
+    },
+    "JoJo no Kimyou na Bouken Part 6 - Stone Ocean": {
+      "best_params": {
+        "dither": "atkinson",
+        "gamma": 0.7,
+        "contrast": 0,
+        "contrast_name": "off",
+        "sharpen": 0.7,
+        "sharpen_name": "normal",
+        "denoise": false
+      },
+      "best_score": 0.9324,
+      "worst_score": 0.7587,
+      "default_score": 0.9289,
+      "default_rank": 19,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.8692,
+        "pre_dither_entropy": 5.373,
+        "pre_dither_edge_density": 57.89,
+        "pre_dither_std": 100.6,
+        "clip_quality": 0.1395
+      }
+    },
+    "JoJo no Kimyou na Bouken Part 7 - Steel Ball Run": {
+      "best_params": {
+        "dither": "atkinson",
+        "gamma": 0.5,
+        "contrast": 2,
+        "contrast_name": "normal",
+        "sharpen": 0.7,
+        "sharpen_name": "normal",
+        "denoise": false
+      },
+      "best_score": 0.7573,
+      "worst_score": 0.5714,
+      "default_score": 0.74,
+      "default_rank": 21,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.3401,
+        "pre_dither_entropy": 5.16,
+        "pre_dither_edge_density": 59.85,
+        "pre_dither_std": 83.6,
+        "clip_quality": 0.1232
+      }
+    },
+    "Koe no Katachi": {
+      "best_params": {
+        "dither": "atkinson",
+        "gamma": 1.0,
+        "contrast": 2,
+        "contrast_name": "normal",
+        "sharpen": 0.0,
+        "sharpen_name": "off",
+        "denoise": false
+      },
+      "best_score": 0.8689,
+      "worst_score": 0.5997,
+      "default_score": 0.8655,
+      "default_rank": 9,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.5751,
+        "pre_dither_entropy": 5.84,
+        "pre_dither_edge_density": 53.88,
+        "pre_dither_std": 97.8,
+        "clip_quality": 0.131
+      }
+    },
+    "One Piece": {
+      "best_params": {
+        "dither": "atkinson",
+        "gamma": 1.0,
+        "contrast": 2,
+        "contrast_name": "normal",
+        "sharpen": 0.0,
+        "sharpen_name": "off",
+        "denoise": false
+      },
+      "best_score": 0.8141,
+      "worst_score": 0.7149,
+      "default_score": 0.8119,
+      "default_rank": 10,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.3674,
+        "pre_dither_entropy": 5.707,
+        "pre_dither_edge_density": 52.27,
+        "pre_dither_std": 86.2,
+        "clip_quality": 0.1235
+      }
+    },
+    "One-Punch Man": {
+      "best_params": {
+        "dither": "atkinson",
+        "gamma": 0.9,
+        "contrast": 1,
+        "contrast_name": "light",
+        "sharpen": 0.7,
+        "sharpen_name": "normal",
+        "denoise": false
+      },
+      "best_score": 0.8915,
+      "worst_score": 0.7134,
+      "default_score": 0.8732,
+      "default_rank": 34,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.7942,
+        "pre_dither_entropy": 6.416,
+        "pre_dither_edge_density": 47.99,
+        "pre_dither_std": 85.9,
+        "clip_quality": 0.1022
+      }
+    },
+    "Oyasumi Punpun": {
+      "best_params": {
+        "dither": "floyd",
+        "gamma": 1.0,
+        "contrast": 2,
+        "contrast_name": "normal",
+        "sharpen": 0.3,
+        "sharpen_name": "light",
+        "denoise": false
+      },
+      "best_score": 0.7752,
+      "worst_score": 0.6508,
+      "default_score": 0.7531,
+      "default_rank": 57,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.4947,
+        "pre_dither_entropy": 4.815,
+        "pre_dither_edge_density": 34.36,
+        "pre_dither_std": 99.0,
+        "clip_quality": 0.1008
+      }
+    },
+    "SPYFAMILY Extras": {
+      "best_params": {
+        "dither": "atkinson",
+        "gamma": 0.9,
+        "contrast": 0,
+        "contrast_name": "off",
+        "sharpen": 0.7,
+        "sharpen_name": "normal",
+        "denoise": false
+      },
+      "best_score": -0.1691,
+      "worst_score": -0.2003,
+      "default_score": -0.196,
+      "default_rank": 37,
+      "total_combos": 66,
+      "best_metrics": {
+        "ssim": 0.1023,
+        "pre_dither_entropy": 0.523,
+        "pre_dither_edge_density": 3.87,
+        "pre_dither_std": 11.6,
+        "clip_quality": 0.0393
+      }
+    },
+    "The Riddler - Year One (2023) (digital) (Son of Ultron-Empire)": {
+      "best_params": {
+        "dither": "sierra-lite",
+        "gamma": 1.0,
+        "contrast": 0,
+        "contrast_name": "off",
+        "sharpen": 0.7,
+        "sharpen_name": "normal",
+        "denoise": false
+      },
+      "best_score": 0.8574,
+      "worst_score": 0.4717,
+      "default_score": 0.8269,
+      "default_rank": 22,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.5868,
+        "pre_dither_entropy": 6.157,
+        "pre_dither_edge_density": 33.98,
+        "pre_dither_std": 91.2,
+        "clip_quality": 0.1115
+      }
+    },
+    "The Sandman v01 - Preludes and Nocturnes (2010) (digital-Empire)": {
+      "best_params": {
+        "dither": "atkinson",
+        "gamma": 1.5,
+        "contrast": 0,
+        "contrast_name": "off",
+        "sharpen": 0.7,
+        "sharpen_name": "normal",
+        "denoise": false
+      },
+      "best_score": 0.9364,
+      "worst_score": 0.0419,
+      "default_score": 0.8769,
+      "default_rank": 26,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.795,
+        "pre_dither_entropy": 6.75,
+        "pre_dither_edge_density": 58.12,
+        "pre_dither_std": 95.4,
+        "clip_quality": 0.1305
+      }
+    },
+    "Vagabond": {
+      "best_params": {
+        "dither": "atkinson",
+        "gamma": 0.5,
+        "contrast": 2,
+        "contrast_name": "normal",
+        "sharpen": 0.7,
+        "sharpen_name": "normal",
+        "denoise": false
+      },
+      "best_score": 0.8352,
+      "worst_score": 0.4866,
+      "default_score": 0.8243,
+      "default_rank": 9,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.7801,
+        "pre_dither_entropy": 5.795,
+        "pre_dither_edge_density": 59.05,
+        "pre_dither_std": 95.3,
+        "clip_quality": 0.0864
+      }
+    },
+    "Vinland Saga": {
+      "best_params": {
+        "dither": "atkinson",
+        "gamma": 0.7,
+        "contrast": 3,
+        "contrast_name": "strong",
+        "sharpen": 0.7,
+        "sharpen_name": "normal",
+        "denoise": false
+      },
+      "best_score": 0.8286,
+      "worst_score": 0.6531,
+      "default_score": 0.8107,
+      "default_rank": 22,
+      "total_combos": 198,
+      "best_metrics": {
+        "ssim": 0.4326,
+        "pre_dither_entropy": 5.703,
+        "pre_dither_edge_density": 41.71,
+        "pre_dither_std": 83.5,
+        "clip_quality": 0.1202
+      }
+    }
+  }
+}

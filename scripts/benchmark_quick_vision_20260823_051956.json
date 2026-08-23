@@ -1,0 +1,33 @@
+{
+  "mode": "quick",
+  "vision": true,
+  "num_titles": 1,
+  "num_pages": 1,
+  "num_combos": 26,
+  "total_runs": 26,
+  "titles": {
+    "Berserk": {
+      "best_params": {
+        "dither": "atkinson",
+        "gamma": 0.5,
+        "contrast": 2,
+        "contrast_name": "normal",
+        "sharpen": 0.7,
+        "sharpen_name": "normal",
+        "denoise": false
+      },
+      "best_score": 0.7837,
+      "worst_score": 0.7546,
+      "default_score": 0.7696,
+      "default_rank": 11,
+      "total_combos": 26,
+      "best_metrics": {
+        "ssim": 0.2513,
+        "pre_dither_entropy": 5.776,
+        "pre_dither_edge_density": 58.11,
+        "pre_dither_std": 82.5,
+        "clip_quality": 0.1222
+      }
+    }
+  }
+}

@@ -345,9 +345,9 @@
     <label><input type="checkbox" id="optRotateCw"> Flip landscape direction</label>
     <div style="margin-top:6px">
       <span style="color:var(--muted); margin-right:8px">Dithering:</span>
-      <label style="margin-right:12px" title="Best for manga and linework. Won 10/16 titles in benchmark testing across Berserk, Akira, JoJo, One Piece, Vagabond, and more."><input type="radio" name="dither" value="atkinson" checked> Atkinson <span style="font-size:10px;color:var(--muted)">(recommended)</span></label>
-      <label style="margin-right:12px" title="Smoother gradients, best for painted/color art like Sandman, or clean shonen like Chainsaw Man and Dragon Ball."><input type="radio" name="dither" value="floyd"> Floyd-Steinberg <span style="font-size:10px;color:var(--muted)">(smooth gradients)</span></label>
-      <label title="Faster diffusion, slightly sharper. A middle ground between Atkinson and Floyd-Steinberg."><input type="radio" name="dither" value="sierra-lite"> Sierra Lite <span style="font-size:10px;color:var(--muted)">(sharper)</span></label>
+      <label style="margin-right:12px" title="Produces a clean dot pattern that reads well on e-ink screens. Best for most manga and comics."><input type="radio" name="dither" value="atkinson" checked> Atkinson <span style="font-size:10px;color:var(--muted)">(recommended)</span></label>
+      <label style="margin-right:12px" title="Smoother gradients with less visible dot pattern. Try for sparse or minimalist art with large flat areas."><input type="radio" name="dither" value="floyd"> Floyd-Steinberg <span style="font-size:10px;color:var(--muted)">(smooth gradients)</span></label>
+      <label title="A middle ground — slightly sharper than Floyd-Steinberg, softer than Atkinson."><input type="radio" name="dither" value="sierra-lite"> Sierra Lite <span style="font-size:10px;color:var(--muted)">(sharper)</span></label>
     </div>
 
     <div style="margin-top:8px; border-top:1px solid var(--border); padding-top:8px;">
@@ -361,43 +361,43 @@
             <span id="optGammaVal" style="min-width:28px; text-align:right; font-size:12px; color:var(--muted)">1.0</span>
             <a id="optGammaReset" style="font-size:11px; color:var(--accent); cursor:pointer; display:none">reset</a>
           </div>
-          <div style="font-size:10px; color:var(--muted); padding-left:78px;">Mid-tone brightness. 1.0 is best for most titles. Try 1.5 for painted art (Sandman), 2.0 for very bright pages (Chainsaw Man), or 0.7-0.8 for washed-out scans.</div>
+          <div style="font-size:10px; color:var(--muted); padding-left:78px;">Page brightness. Higher = brighter pages. Increase if pages look too dark; decrease if pages look washed out.</div>
         </div>
 
         <div style="margin-bottom:8px;">
           <div style="display:flex; align-items:center; gap:8px; margin-bottom:2px;">
             <span style="min-width:70px">Contrast</span>
             <select id="optContrast" style="flex:1; padding:3px 6px; border:1px solid var(--border); border-radius:4px; background:var(--card); color:var(--text); font-size:12px;">
-              <option value="0">Off — use for already high-contrast art (Berserk, Riddler)</option>
-              <option value="1">Light — subtle stretch, preserves shadows</option>
-              <option value="2" selected>Normal — best for most manga and comics (default)</option>
-              <option value="3">Strong — punchy blacks, brighter whites</option>
-              <option value="4">Max — extreme, may crush shadows</option>
+              <option value="0">Off — no adjustment, best for color comics or dark inky art</option>
+              <option value="1">Light — gentle boost, good for color comics</option>
+              <option value="2" selected>Normal — best for manga (default)</option>
+              <option value="3">Strong — punchy blacks and brighter whites</option>
+              <option value="4">Max — extreme, may lose shadow detail</option>
             </select>
           </div>
-          <div style="font-size:10px; color:var(--muted); padding-left:78px;">Histogram stretch for e-ink contrast. Try Off for dark/inky art, Strong for washed-out scans.</div>
+          <div style="font-size:10px; color:var(--muted); padding-left:78px;">Makes blacks darker and whites whiter. Normal is best for manga. Try Light or Off for color comics.</div>
         </div>
 
         <div style="margin-bottom:8px;">
           <div style="display:flex; align-items:center; gap:8px; margin-bottom:2px;">
             <span style="min-width:70px">Sharpening</span>
             <select id="optSharpen" style="flex:1; padding:3px 6px; border:1px solid var(--border); border-radius:4px; background:var(--card); color:var(--text); font-size:12px;">
-              <option value="0">Off — best for dense linework (Akira, Blame, One Piece)</option>
-              <option value="0.3">Light — gentle, for noisy scans</option>
-              <option value="0.7" selected>Normal — balanced clarity (default)</option>
-              <option value="1.2">Strong — crisp lines, may amplify grain</option>
+              <option value="0">Off — for pages with very fine detail or crosshatching</option>
+              <option value="0.3">Light — gentle, for cleaner scans</option>
+              <option value="0.7" selected>Normal — makes lines and text crisper (default)</option>
+              <option value="1.2">Strong — very crisp, may amplify grain on scans</option>
             </select>
           </div>
-          <div style="font-size:10px; color:var(--muted); padding-left:78px;">Edge enhancement before dithering. Off works better for very detailed art; Normal is best for most manga.</div>
+          <div style="font-size:10px; color:var(--muted); padding-left:78px;">Makes lines and text crisper. Try Off if you see shimmering on very detailed pages.</div>
         </div>
 
         <div>
           <label style="display:flex; align-items:center; gap:8px;">
             <span style="min-width:70px">Denoise</span>
             <input type="checkbox" id="optDenoise">
-            <span>Clean up grain/noise before dithering</span>
+            <span>Smooth grainy scans</span>
           </label>
-          <div style="font-size:10px; color:var(--muted); padding-left:78px; margin-top:2px;">Median filter for JPEG artifacts and scan noise. Off performed better across all 16 tested titles — only enable for very noisy/low-quality rips.</div>
+          <div style="font-size:10px; color:var(--muted); padding-left:78px; margin-top:2px;">Usually makes things worse — only turn on for poor-quality scans with visible speckles in white areas.</div>
         </div>
 
       </div>
