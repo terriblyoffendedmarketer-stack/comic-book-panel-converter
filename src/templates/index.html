@@ -431,9 +431,17 @@
   </div>
 
   <button class="primary" id="convertBtn" disabled style="margin-top:12px">Convert</button>
-  <div id="localLauncherHint" style="display:none; margin-top:8px; padding:8px 10px; background:var(--selected-bg); border:1px solid var(--border); border-radius:6px; font-size:11px; color:var(--muted);">
-    Large files? Double-click <strong>commands/Launch Converter.command</strong> in your project folder to run locally with unlimited storage.
-  </div>
+  <details id="localLauncherHint" style="display:none; margin-top:8px; padding:8px 10px; background:var(--selected-bg); border:1px solid var(--border); border-radius:6px; font-size:11px; color:var(--muted);">
+    <summary style="cursor:pointer; user-select:none;">Large files? Run locally for unlimited storage <span style="font-size:10px;">&#9660;</span></summary>
+    <div style="margin-top:6px; position:relative;">
+      <pre id="localCmd" style="background:var(--card); border:1px solid var(--border); border-radius:4px; padding:8px 10px; font-size:11px; white-space:pre-wrap; word-break:break-all; margin:0;">git clone https://github.com/terriblyoffendedmarketer-stack/comic-book-panel-converter.git
+cd comic-book-panel-converter
+python3 -m venv venv &amp;&amp; source venv/bin/activate &amp;&amp; pip install -r requirements.txt
+python src/web_app.py</pre>
+      <button onclick="navigator.clipboard.writeText(document.getElementById('localCmd').textContent);this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)" style="position:absolute; top:4px; right:4px; font-size:10px; padding:2px 8px; background:var(--accent); color:#fff; border:none; border-radius:3px; cursor:pointer;">Copy</button>
+      <p style="margin-top:4px; font-size:10px; color:var(--muted);">Already cloned? Just run <code style="background:var(--card); padding:1px 3px; border-radius:2px;">cd your-project-folder && source venv/bin/activate && python src/web_app.py</code> — opens at localhost:8080</p>
+    </div>
+  </details>
 
   <div class="progress-box" id="convertProgress">
     <span class="spinner"></span>
