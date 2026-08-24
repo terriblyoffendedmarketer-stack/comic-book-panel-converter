@@ -33,7 +33,7 @@ from detect_panels import detect_panels
 from xtc_pipeline import (get_segments, process_page, process_cover,
                           calculate_continuous_segments)
 from build_epub import build_epub
-from build_xtc import image_to_xtg, build_xtc
+from build_xtc import image_to_xtg, image_to_xth, build_xtc
 from mangadex import search_manga, get_volumes, download_volume_as_cbz
 from mangapill import search_manga as mp_search, get_volumes as mp_volumes, download_volume_as_cbz as mp_download
 from onemanga import search_manga as om_search, get_volumes as om_volumes, download_volume_as_cbz as om_download
@@ -160,7 +160,7 @@ def detect_panels_parallel(pages, manga):
     return all_panels
 
 
-def convert_xteink_thirds(comic_path, manga, title, progress, is_cancelled=None, continuous=False, rotate_cw=False, dither_algo='atkinson', gamma=1.0, contrast=2, sharpen=0.7, denoise=False):
+def convert_xteink_thirds(comic_path, manga, title, progress, is_cancelled=None, continuous=False, rotate_cw=False, dither_algo='floyd', gamma=1.0, contrast=2, sharpen=0.7, denoise=False, is_2bit=False):
     """Convert for XTe Ink using overlapping thirds + XTC native format."""
     device = DEVICE_PROFILES['xteink']
     tw, th = device['width'], device['height']
@@ -185,8 +185,8 @@ def convert_xteink_thirds(comic_path, manga, title, progress, is_cancelled=None,
         xtg_pages = []
 
         cover_img = Image.open(pages[0])
-        cover = process_cover(cover_img, dither_algo=dither_algo, target_w=tw, target_h=th, gamma=gamma, contrast_level=contrast, sharpen=sharpen, denoise=denoise)
-        xtg_pages.append(image_to_xtg(cover))
+        cover = process_cover(cover_img, dither_algo=dither_algo, target_w=tw, target_h=th, gamma=gamma, contrast_level=contrast, sharpen=sharpen, denoise=denoise, is_2bit=is_2bit)
+        xtg_pages.append((image_to_xth if is_2bit else image_to_xtg)(cover))
 
         content_pages = pages[1:]
 
@@ -223,8 +223,8 @@ def convert_xteink_thirds(comic_path, manga, title, progress, is_cancelled=None,
                     composite.paste(img2.crop((0, 0, w, h2)), (0, h1))
                     img = composite
 
-                processed = process_page(img, rotate_cw=rotate_cw, dither_algo=dither_algo, target_w=tw, target_h=th, gamma=gamma, contrast_level=contrast, sharpen=sharpen, denoise=denoise)
-                xtg_pages.append(image_to_xtg(processed))
+                processed = process_page(img, rotate_cw=rotate_cw, dither_algo=dither_algo, target_w=tw, target_h=th, gamma=gamma, contrast_level=contrast, sharpen=sharpen, denoise=denoise, is_2bit=is_2bit)
+                xtg_pages.append((image_to_xth if is_2bit else image_to_xtg)(processed))
         else:
             skip_detection = manga or total_pages > 100
             panel_cache = {}
@@ -244,12 +244,13 @@ def convert_xteink_thirds(comic_path, manga, title, progress, is_cancelled=None,
 
                 for rx, ry, rw, rh in regions:
                     crop = img.crop((rx, ry, rx + rw, ry + rh))
-                    processed = process_page(crop, rotate_cw=rotate_cw, dither_algo=dither_algo, target_w=tw, target_h=th, gamma=gamma, contrast_level=contrast, sharpen=sharpen, denoise=denoise)
-                    xtg_pages.append(image_to_xtg(processed))
+                    processed = process_page(crop, rotate_cw=rotate_cw, dither_algo=dither_algo, target_w=tw, target_h=th, gamma=gamma, contrast_level=contrast, sharpen=sharpen, denoise=denoise, is_2bit=is_2bit)
+                    xtg_pages.append((image_to_xth if is_2bit else image_to_xtg)(processed))
 
-        progress("Building XTC...")
-        xtc_path = out_dir / f"{title}.xtc"
-        xtc_data = build_xtc(xtg_pages, title=title)
+        ext = '.xtch' if is_2bit else '.xtc'
+        progress(f"Building {'XTCH' if is_2bit else 'XTC'}...")
+        xtc_path = out_dir / f"{title}{ext}"
+        xtc_data = build_xtc(xtg_pages, title=title, is_2bit=is_2bit)
         xtc_path.write_bytes(xtc_data)
 
         return str(xtc_path)
@@ -296,7 +297,7 @@ def convert_kindle(comic_path, manga, title, progress):
         return None
 
 
-def run_conversion(job_id, filepath, devices, continuous=False, rotate_cw=False, dither_algo='atkinson', gamma=1.0, contrast=2, sharpen=0.7, denoise=False):
+def run_conversion(job_id, filepath, devices, continuous=False, rotate_cw=False, dither_algo='floyd', gamma=1.0, contrast=2, sharpen=0.7, denoise=False, is_2bit=False):
     """Run conversion in background thread."""
     job = jobs[job_id]
 
@@ -320,7 +321,7 @@ def run_conversion(job_id, filepath, devices, continuous=False, rotate_cw=False,
             return
 
         if 'xteink' in devices:
-            path = convert_xteink_thirds(comic_path, manga, title, progress, is_cancelled, continuous=continuous, rotate_cw=rotate_cw, dither_algo=dither_algo, gamma=gamma, contrast=contrast, sharpen=sharpen, denoise=denoise)
+            path = convert_xteink_thirds(comic_path, manga, title, progress, is_cancelled, continuous=continuous, rotate_cw=rotate_cw, dither_algo=dither_algo, gamma=gamma, contrast=contrast, sharpen=sharpen, denoise=denoise, is_2bit=is_2bit)
             if is_cancelled():
                 return
             if path:
@@ -496,11 +497,12 @@ def start_convert():
     devices = data.get('devices', ['xteink'])
     continuous = data.get('continuous', False)
     rotate_cw = data.get('rotate_cw', False)
-    dither_algo = data.get('dither', 'atkinson')
+    dither_algo = data.get('dither', 'floyd')
     gamma = float(data.get('gamma', 1.0))
     contrast = int(data.get('contrast', 2))
     sharpen = float(data.get('sharpen', 0.7))
     denoise = data.get('denoise', False)
+    is_2bit = data.get('is_2bit', False)
 
     if not filename:
         return jsonify({'error': 'No file specified'}), 400
@@ -525,7 +527,7 @@ def start_convert():
         'filename': filename,
     }
 
-    thread = threading.Thread(target=run_conversion, args=(job_id, filepath, devices, continuous, rotate_cw, dither_algo, gamma, contrast, sharpen, denoise))
+    thread = threading.Thread(target=run_conversion, args=(job_id, filepath, devices, continuous, rotate_cw, dither_algo, gamma, contrast, sharpen, denoise, is_2bit))
     thread.daemon = True
     thread.start()
 
@@ -943,7 +945,7 @@ def preview_list():
         folder_path = OUTPUT_DIR / folder
         if folder_path.exists():
             for f in sorted(folder_path.iterdir(), key=lambda x: x.name.lower()):
-                if f.suffix.lower() in ('.epub', '.xtc'):
+                if f.suffix.lower() in ('.epub', '.xtc', '.xtch'):
                     size_mb = f.stat().st_size / (1024 * 1024)
                     epubs.append({
                         'name': f.name,
@@ -962,7 +964,7 @@ def preview_pages(file_path):
         return jsonify({'error': 'File not found'}), 404
 
     pages = []
-    if full_path.suffix.lower() == '.xtc':
+    if full_path.suffix.lower() in ('.xtc', '.xtch'):
         from build_xtc import read_xtc_page_count
         xtc_data = full_path.read_bytes()
         count = read_xtc_page_count(xtc_data)
@@ -997,7 +999,7 @@ def preview_image(file_path, page_idx):
     if not full_path.exists():
         return "File not found", 404
 
-    if full_path.suffix.lower() == '.xtc':
+    if full_path.suffix.lower() in ('.xtc', '.xtch'):
         from build_xtc import read_xtc_page, read_xtc_page_count
         xtc_data = full_path.read_bytes()
         if page_idx >= read_xtc_page_count(xtc_data):

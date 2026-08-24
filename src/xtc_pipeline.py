@@ -529,12 +529,11 @@ def resize_with_padding(img, target_w=TARGET_WIDTH, target_h=TARGET_HEIGHT, pad_
 
 def process_page(img, rotate_cw=False, contrast_level=2, trim_content=True,
                  dither_algo='atkinson', target_w=TARGET_WIDTH, target_h=TARGET_HEIGHT,
-                 gamma=1.0, sharpen=0.7, denoise=False):
+                 gamma=1.0, sharpen=0.7, denoise=False, is_2bit=False):
     """Full xtcjs processing pipeline for a single segment/page.
 
-    Pipeline: grayscale → denoise → content trim → contrast → gamma → rotate → resize → dither.
-
-    Returns a PIL Image ready for XTG encoding.
+    Pipeline: grayscale → denoise → content trim → contrast → gamma → rotate → resize → dither/quantize.
+    When is_2bit=True, returns 8-bit grayscale (no dithering) for XTH encoding.
     """
     gray = to_grayscale(img)
 
@@ -560,6 +559,12 @@ def process_page(img, rotate_cw=False, contrast_level=2, trim_content=True,
 
     pil_gray = resize_with_padding(pil_gray, target_w, target_h)
 
+    if is_2bit:
+        if sharpen and sharpen > 0:
+            from PIL import ImageFilter
+            pil_gray = pil_gray.filter(ImageFilter.UnsharpMask(radius=2, percent=int(sharpen * 100), threshold=0))
+        return pil_gray
+
     gray_arr = np.array(pil_gray, dtype=np.float32)
     dithered = dither(gray_arr, algorithm=dither_algo, sharpen=sharpen)
 
@@ -568,7 +573,7 @@ def process_page(img, rotate_cw=False, contrast_level=2, trim_content=True,
 
 def process_cover(img, contrast_level=2, dither_algo='atkinson',
                   target_w=TARGET_WIDTH, target_h=TARGET_HEIGHT,
-                  gamma=1.0, sharpen=0.7, denoise=False):
+                  gamma=1.0, sharpen=0.7, denoise=False, is_2bit=False):
     """Process cover image — no splitting, no rotation, portrait always."""
     gray = to_grayscale(img)
 
@@ -588,6 +593,12 @@ def process_cover(img, contrast_level=2, dither_algo='atkinson',
 
     pil_gray = Image.fromarray(np.clip(gray, 0, 255).astype(np.uint8), mode='L')
     pil_gray = resize_with_padding(pil_gray, target_w, target_h)
+
+    if is_2bit:
+        if sharpen and sharpen > 0:
+            from PIL import ImageFilter
+            pil_gray = pil_gray.filter(ImageFilter.UnsharpMask(radius=2, percent=int(sharpen * 100), threshold=0))
+        return pil_gray
 
     gray_arr = np.array(pil_gray, dtype=np.float32)
     dithered = dither(gray_arr, algorithm=dither_algo, sharpen=sharpen)

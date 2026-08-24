@@ -1,13 +1,17 @@
-# build_xtc.py — XTC format builder for XTe Ink X4/X3
-# Ports the XTG page encoder and XTC container from xtcjs.
-# XTG = 1-bit packed grayscale page, XTC = container of XTG pages.
+# build_xtc.py — XTC/XTCH format builder for XTe Ink X4/X3
+# Ports the XTG/XTH page encoders and XTC/XTCH containers from xtcjs.
+# XTG = 1-bit packed grayscale page, XTH = 2-bit 4-level grayscale page.
+# XTC = container of XTG pages, XTCH = container of XTH pages.
 #
 # Usage: called by web_app.py conversion pipeline
 # Requires: Pillow, numpy
 #
 # Gotchas:
 # - XTG packs 8 pixels per byte, MSB first. Pixel >= 128 = white (1), else black (0).
+# - XTH uses column-major encoding with X-axis mirrored, two bit planes.
+#   Levels: >=212→0, >=127→1, >=42→2, else→3. colBytes=ceil(h/8), planeSize=colBytes*w.
 # - XTC header uses little-endian throughout, 64-bit offsets.
+# - XTCH magic is 0x58 0x54 0x43 0x48 instead of XTC\0.
 # - Title field is 128 bytes, author 112 bytes — both null-terminated UTF-8.
 # - CrossPoint reads XTC natively — no EPUB overhead, instant page turns.
 
@@ -50,10 +54,57 @@ def image_to_xtg(img):
     return bytes(header) + pixel_data
 
 
-def build_xtc(xtg_pages, title=None, author=None):
-    """Build an XTC file from a list of XTG page byte arrays.
+def image_to_xth(img):
+    """Convert a PIL Image to XTH format (2-bit, 4-level grayscale).
 
-    Returns bytes containing the complete XTC file.
+    Column-major encoding with X-axis mirrored, two bit planes.
+    Levels: >=212→0(white), >=127→1, >=42→2, <42→3(black).
+    """
+    if img.mode != 'L':
+        img = img.convert('L')
+
+    w, h = img.size
+    pixels = np.array(img, dtype=np.uint8)
+
+    levels = np.zeros_like(pixels, dtype=np.uint8)
+    levels[pixels < 212] = 1
+    levels[pixels < 127] = 2
+    levels[pixels < 42] = 3
+
+    col_bytes = (h + 7) // 8
+    pad_h = col_bytes * 8 - h
+    if pad_h > 0:
+        levels = np.pad(levels, ((0, pad_h), (0, 0)), constant_values=0)
+
+    bit0 = (levels & 1).astype(np.uint8)
+    bit1 = ((levels >> 1) & 1).astype(np.uint8)
+
+    mirrored_b0 = bit0[:, ::-1]
+    mirrored_b1 = bit1[:, ::-1]
+
+    plane0 = np.packbits(mirrored_b0, axis=0).T.tobytes()
+    plane1 = np.packbits(mirrored_b1, axis=0).T.tobytes()
+
+    pixel_data = plane0 + plane1
+    digest = pixel_data[:8] if len(pixel_data) >= 8 else pixel_data + b'\x00' * (8 - len(pixel_data))
+
+    header = bytearray(22)
+    header[0:3] = b'XTH'
+    header[3] = 0x00
+    struct.pack_into('<H', header, 4, w)
+    struct.pack_into('<H', header, 6, h)
+    header[8] = 0
+    header[9] = 0
+    struct.pack_into('<I', header, 10, len(pixel_data))
+    header[14:22] = digest[:8]
+
+    return bytes(header) + pixel_data
+
+
+def build_xtc(xtg_pages, title=None, author=None, is_2bit=False):
+    """Build an XTC/XTCH file from a list of XTG/XTH page byte arrays.
+
+    When is_2bit=True, uses XTCH magic (0x58 0x54 0x43 0x48) instead of XTC\\0.
     """
     page_count = len(xtg_pages)
     has_metadata = bool(title or author)
@@ -82,9 +133,11 @@ def build_xtc(xtg_pages, title=None, author=None):
     total_size = data_offset + sum(len(p) for p in xtg_pages)
     buf = bytearray(total_size)
 
-    # Magic: XTC\0
-    buf[0:3] = b'XTC'
-    buf[3] = 0x00
+    if is_2bit:
+        buf[0:4] = b'XTCH'
+    else:
+        buf[0:3] = b'XTC'
+        buf[3] = 0x00
     struct.pack_into('<H', buf, 4, 1)           # version
     struct.pack_into('<H', buf, 6, page_count)
 
@@ -144,9 +197,9 @@ def build_xtc(xtg_pages, title=None, author=None):
 
 
 def read_xtc_page(xtc_data, page_idx):
-    """Read a single page from XTC data and return a PIL Image.
+    """Read a single page from XTC/XTCH data and return a PIL Image.
 
-    Parses the XTC index to find the page, then decodes the XTG 1-bit data.
+    Detects XTG vs XTH pages by their magic and decodes accordingly.
     """
     page_count = struct.unpack_from('<H', xtc_data, 6)[0]
     if page_idx >= page_count:
@@ -160,15 +213,30 @@ def read_xtc_page(xtc_data, page_idx):
     pg_w = struct.unpack_from('<H', xtc_data, entry_off + 12)[0]
     pg_h = struct.unpack_from('<H', xtc_data, entry_off + 14)[0]
 
-    xtg = xtc_data[page_offset:page_offset + page_size]
-    pixel_data = xtg[22:]
+    page_data = xtc_data[page_offset:page_offset + page_size]
+    magic = page_data[0:3]
+    pixel_data = page_data[22:]
 
-    row_bytes = (pg_w + 7) // 8
-    bits = np.unpackbits(np.frombuffer(pixel_data, dtype=np.uint8))
-    pixels = bits.reshape(-1, row_bytes * 8)[:pg_h, :pg_w]
-    img_array = (pixels * 255).astype(np.uint8)
+    if magic == b'XTH':
+        col_bytes = (pg_h + 7) // 8
+        plane_size = col_bytes * pg_w
+        plane0 = np.frombuffer(pixel_data[:plane_size], dtype=np.uint8)
+        plane1 = np.frombuffer(pixel_data[plane_size:plane_size * 2], dtype=np.uint8)
 
-    return Image.fromarray(img_array, mode='L')
+        bits0 = np.unpackbits(plane0).reshape(pg_w, col_bytes * 8).T[:pg_h, ::-1]
+        bits1 = np.unpackbits(plane1).reshape(pg_w, col_bytes * 8).T[:pg_h, ::-1]
+
+        levels = bits0 | (bits1 << 1)
+        lut = np.array([255, 170, 85, 0], dtype=np.uint8)
+        img_array = lut[levels]
+
+        return Image.fromarray(img_array, mode='L')
+    else:
+        row_bytes = (pg_w + 7) // 8
+        bits = np.unpackbits(np.frombuffer(pixel_data, dtype=np.uint8))
+        pixels = bits.reshape(-1, row_bytes * 8)[:pg_h, :pg_w]
+        img_array = (pixels * 255).astype(np.uint8)
+        return Image.fromarray(img_array, mode='L')
 
 
 def read_xtc_page_count(xtc_data):

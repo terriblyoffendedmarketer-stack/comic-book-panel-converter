@@ -259,6 +259,14 @@
     font-size: 13px; color: var(--accent); transition: all 0.15s;
   }
   .preview-upload label:hover { border-color: var(--accent); }
+  .external-viewers { margin-bottom: 12px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .external-viewers h2 { margin: 0; }
+  .external-viewers a {
+    display: inline-block; padding: 6px 12px; background: var(--card);
+    border: 1px solid var(--border); border-radius: 6px; font-size: 12px;
+    color: var(--accent); text-decoration: none; transition: all 0.15s;
+  }
+  .external-viewers a:hover { border-color: var(--accent); background: var(--selected-bg); }
 
   /* Header */
   .header { display: flex; align-items: center; justify-content: space-between; }
@@ -345,11 +353,14 @@
     <label><input type="checkbox" id="optRotateCw"> Flip landscape direction</label>
     <div style="margin-top:6px">
       <span style="color:var(--muted); margin-right:8px">Dithering:</span>
-      <label style="margin-right:12px" title="Produces a clean dot pattern that reads well on e-ink screens. Best for most manga and comics."><input type="radio" name="dither" value="atkinson" checked> Atkinson <span style="font-size:10px;color:var(--muted)">(recommended)</span></label>
-      <label style="margin-right:12px" title="Smoother gradients with less visible dot pattern. Try for sparse or minimalist art with large flat areas."><input type="radio" name="dither" value="floyd"> Floyd-Steinberg <span style="font-size:10px;color:var(--muted)">(smooth gradients)</span></label>
-      <label title="A middle ground — slightly sharper than Floyd-Steinberg, softer than Atkinson."><input type="radio" name="dither" value="sierra-lite"> Sierra Lite <span style="font-size:10px;color:var(--muted)">(sharper)</span></label>
+      <label style="margin-right:12px" title="Best all-rounder. Smooth gradients, preserves subtle shading. Great for screentone manga (Fire Punch, Chainsaw Man), architectural art (Hen na Ie, Blame), and color comics."><input type="radio" name="dither" value="floyd" checked> Floyd-Steinberg <span style="font-size:10px;color:var(--muted)">(recommended)</span></label>
+      <label style="margin-right:12px" title="Sharper, higher-contrast dots. Best for bold line art manga with strong blacks and whites — One Punch Man, Dragon Ball, Naruto. Can lose subtle shading on softer art."><input type="radio" name="dither" value="atkinson"> Atkinson <span style="font-size:10px;color:var(--muted)">(bold line art)</span></label>
+      <label title="A middle ground — slightly sharper than Floyd-Steinberg, softer than Atkinson."><input type="radio" name="dither" value="sierra-lite"> Sierra Lite <span style="font-size:10px;color:var(--muted)">(middle ground)</span></label>
     </div>
 
+    <div style="margin-top:6px;">
+      <label title="Outputs XTCH format with 4 grayscale levels instead of pure black/white. Better for manga with subtle shading (Hen na Ie, Blame). Files are ~2x larger. Experimental — requires newer CrossPoint firmware."><input type="checkbox" id="opt2bit"> 2-bit grayscale (XTCH) <span style="font-size:10px;color:var(--muted)">— 4 shades instead of 2, better for detailed art</span></label>
+    </div>
     <div style="margin-top:8px; border-top:1px solid var(--border); padding-top:8px;">
       <a id="advancedToggle" style="color:var(--accent); cursor:pointer; font-size:12px; user-select:none;">Advanced options &#9654;</a>
       <div id="advancedOptions" style="display:none; margin-top:8px;">
@@ -375,7 +386,7 @@
               <option value="4">Max — extreme, may lose shadow detail</option>
             </select>
           </div>
-          <div style="font-size:10px; color:var(--muted); padding-left:78px;">Makes blacks darker and whites whiter. Normal is best for manga. Try Light or Off for color comics.</div>
+          <div style="font-size:10px; color:var(--muted); padding-left:78px;">Makes blacks darker and whites whiter. Normal is best for clean manga. Use Light or Off for color comics, and Off for heavily crosshatched art (Blame, Berserk) — contrast makes dense dark art even muddier.</div>
         </div>
 
         <div style="margin-bottom:8px;">
@@ -420,6 +431,9 @@
   </div>
 
   <button class="primary" id="convertBtn" disabled style="margin-top:12px">Convert</button>
+  <div id="localLauncherHint" style="display:none; margin-top:8px; padding:8px 10px; background:var(--selected-bg); border:1px solid var(--border); border-radius:6px; font-size:11px; color:var(--muted);">
+    Large files? Run locally for unlimited storage: <code style="font-size:10px; background:var(--card); padding:1px 4px; border-radius:3px;">python src/web_app.py</code> &mdash; <a href="https://github.com/terriblyoffendedmarketer-stack/comic-book-panel-converter#setup--run" target="_blank" rel="noopener" style="color:var(--accent)">setup guide</a>
+  </div>
 
   <div class="progress-box" id="convertProgress">
     <span class="spinner"></span>
@@ -507,8 +521,14 @@
   <div class="preview-upload">
     <label>
       Or upload a file
-      <input type="file" id="previewFileInput" accept=".epub,.xtc" style="display:none">
+      <input type="file" id="previewFileInput" accept=".epub,.xtc,.xtch" style="display:none">
     </label>
+  </div>
+
+  <div class="external-viewers">
+    <h2>Quick viewers</h2>
+    <a href="https://simogecko.github.io/XtcViewer/" target="_blank" rel="noopener">XTC Viewer</a>
+    <a href="https://htmlcbz.pages.dev/" target="_blank" rel="noopener">CBZ Reader</a>
   </div>
 
   <div class="preview-viewport" id="previewViewport">
@@ -544,6 +564,7 @@ settingUnfiltered.addEventListener('change', () => {
 function isUnfiltered() { return settingUnfiltered.checked; }
 
 if (CLOUD) {
+  document.getElementById('localLauncherHint').style.display = 'block';
   document.getElementById('diskUsageGroup').style.display = 'block';
   document.getElementById('flushStorageBtn').addEventListener('click', async () => {
     if (!confirm('Delete ALL files from the server (input + output)?')) return;
@@ -839,7 +860,7 @@ convertBtn.addEventListener('click', async () => {
       const res = await fetch('/convert', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filename, devices, continuous: document.getElementById('optContinuous').checked, rotate_cw: document.getElementById('optRotateCw').checked, dither: document.querySelector('input[name="dither"]:checked').value, gamma: parseFloat(document.getElementById('optGamma').value), contrast: parseFloat(document.getElementById('optContrast').value), sharpen: parseFloat(document.getElementById('optSharpen').value), denoise: document.getElementById('optDenoise').checked })
+        body: JSON.stringify({ filename, devices, continuous: document.getElementById('optContinuous').checked, rotate_cw: document.getElementById('optRotateCw').checked, dither: document.querySelector('input[name="dither"]:checked').value, gamma: parseFloat(document.getElementById('optGamma').value), contrast: parseFloat(document.getElementById('optContrast').value), sharpen: parseFloat(document.getElementById('optSharpen').value), denoise: document.getElementById('optDenoise').checked, is_2bit: document.getElementById('opt2bit').checked })
       });
       const { job_id, error } = await res.json();
       if (error) { addLogEntry(progressLog, error); continue; }
