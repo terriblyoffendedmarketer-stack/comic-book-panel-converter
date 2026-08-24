@@ -10,14 +10,14 @@ Converts comic book files (CBZ/CBR/CB7) into e-reader optimized formats: XTC for
 - **Download tab**: Three sources (MangaDex, MangaPill, 1manga). Per-volume selection with Select All, custom chapter range picker. Cancel button. Download only (no auto-convert).
 - **Preview tab**: View converted EPUBs/XTCs at exact device viewport. Arrow key navigation.
 **Conversion modes:**
-- **XTe Ink**: Overlapping thirds (xtcjs algorithm) with gutter snapping, landscape rotation, 3 dithering options (Floyd-Steinberg/Sierra Lite/Atkinson). Native C dithering via ctypes. Outputs XTC native format (1-bit packed, instant page turns on CrossPoint).
+- **XTe Ink**: Overlapping thirds (xtcjs algorithm) with gutter snapping, landscape rotation, 3 dithering options (Floyd-Steinberg/Sierra Lite/Atkinson). Native C dithering via ctypes. Outputs XTC (1-bit) or XTCH (2-bit, 4-level grayscale) native format, instant page turns on CrossPoint.
 - **Kindle**: KCC for fixed-layout EPUB with virtual panel view.
-**Defaults:** Atkinson dithering (benchmark winner for 10/16 titles), gamma 1.0, contrast Normal (level 2), sharpen Normal (0.7), denoise OFF, continuous overlap OFF, landscape flip OFF. Floyd-Steinberg better for painted/color art (Sandman, Chainsaw Man).
-**Tested on:** Civil War collection (104 files), Amazing SpiderMan, Riddler, Sandman, Punpun, Chainsaw Man (MangaDex), Berserk.
+**Defaults:** Floyd-Steinberg dithering (matches xtcjs default, best for most manga), gamma 1.0, contrast Normal (level 2), sharpen Normal (0.7), denoise OFF, continuous overlap OFF, landscape flip OFF, 2-bit OFF. Atkinson better for bold line art (OPM, Dragon Ball).
+**Tested on:** Civil War collection (104 files), Amazing SpiderMan, Riddler, Sandman, Punpun, Chainsaw Man (MangaDex), Berserk, Blame!, Fire Punch, Hen na Ie.
 **Storage:** Auto-cleanup system manages the 1GB Fly.io volume. Startup cleanup frees space if <150MB. Downloads auto-delete from server 5 min after user saves them. Space checked before each download; oldest files pruned if tight. Download queue lets you search and add multiple manga without blocking.
 **Next:**
-1. Download remaining test corpus manga (A Silent Voice, Spy x Family, Vinland Saga, Blame!, Dragon Ball, others — see memory)
-2. Contribute gutter snapping + spread detection to xtcjs as PRs (fork exists at terriblyoffendedmarketer-stack/xtcjs)
+1. Download remaining test corpus manga (A Silent Voice, Spy x Family, Vinland Saga, Dragon Ball, others — see memory)
+2. Contribute spread detection to xtcjs as PR (gutter snapping PR #42 and optimal defaults PR #43 already submitted)
 3. Settings analyzer (standalone tool to profile diverse manga and discover optimal presets)
 4. Live preview, tool separation
 
@@ -45,7 +45,8 @@ Converts comic book files (CBZ/CBR/CB7) into e-reader optimized formats: XTC for
 20. [x] Pipeline decoupling — download and convert are independent operations
 21. [x] Removed Device/OPDS tab — handled by separate Vercel tool
 22. [x] Advanced controls — gamma, contrast, sharpening, denoise under collapsible Advanced section
-23. [ ] Settings analyzer — standalone tool to profile diverse manga/comics and discover optimal presets
+23. [x] 2-bit XTCH format — 4-level grayscale (XTH pages) for subtle manga art, Floyd-Steinberg default
+24. [ ] Settings analyzer — standalone tool to profile diverse manga/comics and discover optimal presets
 24. [ ] Live preview — real-time preview of conversion settings before full processing
 25. [ ] Tool separation — 2 repos: converter with preview, downloader
 26. [ ] PDF input support
