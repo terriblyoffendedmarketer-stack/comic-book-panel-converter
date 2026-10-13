@@ -1,6 +1,6 @@
-# extract.py — Extracts page images from comic book archives (CBZ/CBR/CB7)
+# extract.py — Extracts page images from comic book archives (CBZ/CBR/CB7/EPUB/PDF)
 # Usage: python src/extract.py <comic-file> [--output-dir output/]
-# Requires: rarfile, py7zr, Pillow
+# Requires: rarfile, py7zr, Pillow, pymupdf
 # System dep: brew install unrar (for CBR files)
 #
 # Gotchas:
@@ -9,6 +9,8 @@
 # - Some archives nest images inside a subdirectory — we flatten on extract.
 # - On macOS, `brew install unrar` doesn't exist anymore. Use `brew install unar`
 #   and set rarfile.UNRAR_TOOL = "unar" + rarfile.ALT_TOOL = "unar".
+# - EPUB graphic novels store images in OEBPS/images/ or similar; we extract those.
+# - PDF pages are rendered to images at 200 DPI via PyMuPDF (good quality/speed balance).
 
 import sys
 import os
@@ -142,12 +144,17 @@ def extract_cbr(filepath, output_dir):
             [n for n in rf.namelist() if is_image(n)],
             key=natural_sort_key
         )
+        count = 0
         for i, name in enumerate(image_names):
             ext = Path(name).suffix.lower()
             out_path = output_dir / f"page_{i:04d}{ext}"
-            with rf.open(name) as src, open(out_path, 'wb') as dst:
-                shutil.copyfileobj(src, dst)
-        return len(image_names)
+            try:
+                with rf.open(name) as src, open(out_path, 'wb') as dst:
+                    shutil.copyfileobj(src, dst)
+                count += 1
+            except rarfile.BadRarFile:
+                print(f"  Warning: skipping corrupt file {name}")
+        return count
 
 
 def extract_cb7(filepath, output_dir):
@@ -178,10 +185,43 @@ def extract_cb7(filepath, output_dir):
         return len(extracted)
 
 
+def extract_epub(filepath, output_dir):
+    """Extract page images from a graphic novel EPUB."""
+    with zipfile.ZipFile(filepath, 'r') as zf:
+        image_names = sorted(
+            [n for n in zf.namelist()
+             if is_image(n) and not n.startswith('__MACOSX')],
+            key=natural_sort_key
+        )
+        for i, name in enumerate(image_names):
+            ext = Path(name).suffix.lower()
+            out_path = output_dir / f"page_{i:04d}{ext}"
+            with zf.open(name) as src, open(out_path, 'wb') as dst:
+                shutil.copyfileobj(src, dst)
+        return len(image_names)
+
+
+def extract_pdf(filepath, output_dir, dpi=200):
+    """Render PDF pages to images via PyMuPDF."""
+    import pymupdf
+    doc = pymupdf.open(str(filepath))
+    count = 0
+    for i in range(len(doc)):
+        page = doc[i]
+        pix = page.get_pixmap(dpi=dpi)
+        out_path = output_dir / f"page_{i:04d}.jpg"
+        pix.save(str(out_path))
+        count += 1
+    doc.close()
+    return count
+
+
 EXTRACTORS = {
     '.cbz': extract_cbz,
     '.cbr': extract_cbr,
     '.cb7': extract_cb7,
+    '.epub': extract_epub,
+    '.pdf': extract_pdf,
 }
 
 

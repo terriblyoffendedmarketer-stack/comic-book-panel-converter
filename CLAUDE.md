@@ -49,8 +49,10 @@ Converts comic book files (CBZ/CBR/CB7) into e-reader optimized formats: XTC for
 24. [ ] Settings analyzer — standalone tool to profile diverse manga/comics and discover optimal presets
 24. [ ] Live preview — real-time preview of conversion settings before full processing
 25. [ ] Tool separation — 2 repos: converter with preview, downloader
-26. [ ] PDF input support
-27. [ ] Mihon chapter combining — merge downloaded chapter CBZs into volumes
+26. [x] PDF input support — PyMuPDF renders pages at 200 DPI
+27. [x] EPUB input support — extracts images from graphic novel EPUBs
+28. [x] Batch conversion script — per-comic strategy for mixed device targets
+29. [ ] Mihon chapter combining — merge downloaded chapter CBZs into volumes
 
 ## Overlapping Thirds — xtcjs Algorithm (xtc_pipeline.py)
 
@@ -110,6 +112,18 @@ Three download sources available via the Download tab:
 - Cloud mode auto-deletes source CBZs after conversion to avoid filling Fly.io volume (1 GB default)
 - `cc` may be aliased to `claude` on dev machines — use `/usr/bin/gcc` explicitly when compiling dither_native.c
 - dither_native.so is architecture-specific — excluded from git and Docker context, compiled during Docker build
+- EPUB graphic novels are ZIP files with images in OEBPS/images/ — extract.py handles them like CBZ
+- PDF pages rendered via PyMuPDF at 200 DPI — good quality/speed balance; 300 DPI is overkill for e-ink
+- **Philosophy graphic novel batch conversion failed badly** — KCC dropped text-only pages, speech bubbles lost content, page splitting was nonsensical (tested on Labyrinth and others). KCC and Kumiko are manga tools; they don't handle text-heavy Western graphic novels with mixed layouts. The entire approach of panel detection + KCC is wrong for this content type. Full-page resize (no splitting) or a completely different pipeline is needed.
+- For philosophy/art graphic novels: panel-per-page beats overlapping thirds because panels are self-contained visual arguments with clean gutters. Thirds works better for manga where panels lack clear boundaries.
+- Dithering choice by art style: Atkinson for bold B&W line art (high contrast), Floyd-Steinberg for painterly/photographic (preserves gradients)
+- KCC accepts directories of images in addition to archive files — useful for EPUB/PDF inputs that need extraction first
+- KCC internal extraction fails on some CBR filenames (special chars) — always extract via our extract.py first, then pass directory
+- Some CBRs have corrupt pages (CRC mismatch) — extract_cbr now catches BadRarFile per-file and skips corrupt pages
+- When running parallel conversions, use separate temp dirs per device to avoid cleanup conflicts
+- **Row-splitting pipeline** for readable e-reader viewing: detect horizontal gutters between panel rows (10th percentile brightness, center 80% width, merge within 40px), split into 2-3 rows, resize each row for landscape viewport. Text goes from ~5pt (full page on 6") to ~13pt (split row). Falls back to even thirds when no gutters found.
+- **EPUB text layers in graphic novel EPUBs**: dialog text stored as positioned HTML divs overlaid on images with empty speech bubbles. Must render via Calibre (`ebook-convert --custom-size WxH --unit point --pdf-page-margin-* 0`) to composite text onto images before splitting. Match --custom-size to EPUB viewport dimensions.
+- **XTCH (2-bit) for text-heavy comics**: 4-level grayscale quantization (no dithering) preserves text much better than 1-bit dithered XTC. Use XTCH for philosophy graphic novels where text readability is critical.
 
 ## File Map
 
@@ -130,12 +144,17 @@ Three download sources available via the Download tab:
 - `src/templates/index.html` — web UI (tabs: Convert, Download, Preview)
 - `src/static/` — PWA icons (icon-192.png, icon-512.png)
 - `scripts/analyze_orientation.py` — profiles comics by landscape vs portrait ratio
+- `scripts/kindle_split_convert.py` — row-splitting Kindle converter: detects horizontal gutters, splits pages into 2-3 rows for landscape reading (1448x1072)
+- `scripts/kindle_convert.py` — full-page Kindle converter with landscape mode (used for "Here")
+- `scripts/xteink_split_convert.py` — row-splitting XTe Ink converter: same gutter detection, outputs XTCH (2-bit, 4-level grayscale) for CrossPoint
+- `scripts/batch_convert.py` — per-comic batch conversion for mixed Kindle/XTe Ink targets with per-comic strategy
 - `scripts/benchmark.py` — parameter sweep across test corpus: math metrics (SSIM, entropy, edge density, histogram) for all dither/gamma/contrast/sharpen combos
 - `commands/Launch Converter.command` — starts web UI in browser
 - `commands/Install Auto-Start.command` — sets up launchd for always-on at localhost:8080
 - `commands/Uninstall Auto-Start.command` — removes launchd service
 - `input/` — comic files and MangaDex downloads (not in git)
 - `output/` — converted EPUBs organized by device (not in git)
+- `test/` — failed philosophy graphic novel conversions (Kindle EPUBs + XTe Ink XTCs) kept as reference for what NOT to do
 - `logs/` — web app logs when running via launchd (not in git)
 - `requirements.txt` — Python dependencies
 - `Dockerfile` — production container with all system deps
